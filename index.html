@@ -1366,9 +1366,98 @@
         .custom-dialog .dialog-cancel-btn:hover:not(:disabled) {
             background-color: var(--bg-button-action-hover);
         }
+        /* Thought Summary表示スタイル */
+        .thought-summary-details {
+            margin-bottom: 10px; /* 本文との間隔 */
+            font-size: 13px;
+            border: 1px solid var(--border-tertiary);
+            border-radius: 5px;
+            background-color: var(--bg-tertiary);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .thought-summary-details summary {
+            cursor: pointer;
+            font-weight: 500; /* 少し太字に */
+            color: var(--text-secondary);
+            list-style: none;
+            padding: 6px 10px;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            user-select: none;
+        }
+        .thought-summary-details summary::-webkit-details-marker { display: none; }
+        .thought-summary-details summary::marker { display: none; }
+        .thought-summary-details summary::before { /* アイコン追加 */
+            content: '🧠'; /* 脳の絵文字など */
+            font-size: 14px;
+            display: inline-block;
+        }
+        .thought-summary-details[open] summary {
+            border-bottom: 1px solid var(--border-tertiary);
+        }
+        .thought-summary-content {
+            padding: 8px 10px;
+            font-size: 13px; /* 本文より少し小さめ */
+            line-height: 1.5;
+            color: var(--text-primary);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .thought-summary-content > *:first-child { margin-top: 0; }
+        .thought-summary-content > *:last-child { margin-bottom: 0; }
+        .thought-summary-content ul,
+        .thought-summary-content ol { margin-left: 1em;}
+        /* ダークモード用 */
+        body.dark-mode .thought-summary-details {
+            border-color: var(--border-primary);
+            background-color: var(--bg-secondary);
+        }
+        body.dark-mode .thought-summary-details summary {
+            color: var(--text-secondary);
+        }
+        body.dark-mode .thought-summary-details[open] summary {
+            border-bottom-color: var(--border-primary);
+        }
+        body.dark-mode .thought-summary-content {
+            color: var(--text-primary);
+        }
+        /* MarkdownスタイルをThought Summaryにも適用 (一部抜粋) */
+        .thought-summary-content pre {
+            background-color: var(--bg-secondary); /* 通常のpreより少し明るいかも */
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 0.8em 0;
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            border: 1px solid var(--border-tertiary);
+            color: var(--text-secondary);
+        }
+        body.dark-mode .thought-summary-content pre {
+            background-color: var(--bg-tertiary); /* ダークモードでは通常preと同じでも良いかも */
+            border-color: var(--border-primary);
+            color: var(--text-secondary);
+        }
+        .thought-summary-content code:not(pre > code) {
+            background-color: var(--bg-secondary);
+            padding: 0.1em 0.3em;
+            border-radius: 3px;
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+            font-size: 0.85em;
+            border: 1px solid var(--border-tertiary);
+            color: var(--text-secondary);
+        }
+        body.dark-mode .thought-summary-content code:not(pre > code) {
+            background-color: var(--bg-tertiary);
+            border-color: var(--border-primary);
+            color: var(--text-secondary);
+        }
         /* --- 引用元表示スタイル --- */
         .citation-details {
-            margin-top: 15px; /* メッセージ本文との間隔 */
+            margin-top: 10px; /* 少し詰める */
             font-size: 12px;
             border-top: 1px dashed var(--border-secondary); /* 区切り線 */
             padding-top: 8px;
@@ -1663,10 +1752,12 @@
                         <optgroup label="無料">
                             <option value="gemini-2.0-flash">gemini-2.0-flash</option>
                             <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview-04-17</option>
+                            <option value="gemini-2.5-flash-preview-05-20">gemini-2.5-flash-preview-05-20</option>
                             <option value="gemini-2.5-pro-exp-03-25">gemini-2.5-pro-exp-03-25</option>
                         </optgroup>
                         <optgroup label="有料">
                             <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro-preview-03-25</option>
+                            <option value="gemini-2.5-pro-preview-05-06">gemini-2.5-pro-preview-05-06</option>
                         </optgroup>
                         <optgroup label="ユーザー指定" id="user-defined-models-group">
                             <!-- 追加モデルはここにJSで挿入される -->
@@ -1730,6 +1821,14 @@
                         <p style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
                             ※ Thinking Budgetは新しいGeminiモデルのみ対応。0明示でthinkingをOFF。<br>
                             ※ 1～1024指定時は固定で1024になる
+                        </p>
+                        <label class="checkbox-label" style="margin-top: 15px;">
+                            <input type="checkbox" id="include-thoughts-toggle">
+                            Include Thoughts
+                        </label>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-top: -5px; margin-bottom: 10px;">
+                            ※ チェック時、モデルの思考プロセスの要約が返る。<br>
+                            ※ thinkingConfigが有効なモデルでのみ機能。
                         </p>
                     </details>
                 </div>
@@ -1933,7 +2032,7 @@
         const IMPORT_PREFIX = '(取込) ';
         const LIGHT_THEME_COLOR = '#4a90e2';
         const DARK_THEME_COLOR = '#007aff';
-        const APP_VERSION = "0.25"; // トークン数表示
+        const APP_VERSION = "0.26"; // Thought summaries対応、streamingのバグ修正
         const SWIPE_THRESHOLD = 50; // スワイプ判定の閾値 (px)
         const ZOOM_THRESHOLD = 1.01; // ズーム状態と判定するスケールの閾値 (誤差考慮)
         const MAX_FILE_SIZE = 10 * 1024 * 1024; // 最大ファイルサイズ (例: 10MB)
@@ -2019,6 +2118,7 @@
             presencePenaltyInput: document.getElementById('presence-penalty'),
             frequencyPenaltyInput: document.getElementById('frequency-penalty'),
             thinkingBudgetInput: document.getElementById('thinking-budget'),
+            includeThoughtsToggle: document.getElementById('include-thoughts-toggle'), // Include Thoughts トグル
             dummyUserInput: document.getElementById('dummy-user'),
             dummyModelInput: document.getElementById('dummy-model'),
             concatDummyModelCheckbox: document.getElementById('concat-dummy-model'), // ダミーモデル連結チェックボックス
@@ -2089,6 +2189,7 @@
                 presencePenalty: null,
                 frequencyPenalty: null,
                 thinkingBudget: null,
+                includeThoughts: true, // Include Thoughts のデフォルト値
                 dummyUser: '',
                 dummyModel: '',
                 concatDummyModel: false, // ダミーモデル連結設定
@@ -2107,6 +2208,7 @@
             isSending: false,
             abortController: null,
             partialStreamContent: '',
+            partialThoughtStreamContent: '', // Thought Summary ストリーミング用バッファ
             editingMessageIndex: null,
             isEditingSystemPrompt: false, // システムプロンプト編集中フラグ
             touchStartX: 0, // スワイプ開始X座標
@@ -2411,6 +2513,7 @@
                         role: msg.role,
                         content: msg.content,
                         timestamp: msg.timestamp,
+                        thoughtSummary: msg.thoughtSummary || null, // Thought Summary を保存
                         ...(msg.finishReason && { finishReason: msg.finishReason }),
                         ...(msg.safetyRatings && { safetyRatings: msg.safetyRatings }),
                         ...(msg.error && { error: msg.error }),
@@ -2674,10 +2777,34 @@
                 messageDiv.classList.add('message', role);
                 messageDiv.dataset.index = index; // state.currentMessages 内のインデックス
 
-                // isSelected: false のカスケードメッセージは非表示 (renderChatMessagesでDOMに追加しない方針にしたため、このチェックは不要かも)
-                // if (role === 'model' && state.currentMessages[index]?.isCascaded && !state.currentMessages[index]?.isSelected) {
-                //     messageDiv.classList.add('hidden');
-                // }
+                const messageData = state.currentMessages[index]; // メッセージデータを取得
+                
+                // Thought Summary 表示エリア (モデル応答で thoughtSummary がある場合)
+                if (role === 'model' && messageData && messageData.thoughtSummary) {
+                    const thoughtDetails = document.createElement('details');
+                    thoughtDetails.classList.add('thought-summary-details');
+                    // thoughtDetails.open = false; // 初期は閉じている (デフォルト)
+
+                    const thoughtSummaryElem = document.createElement('summary');
+                    thoughtSummaryElem.textContent = '思考プロセス';
+                    thoughtDetails.appendChild(thoughtSummaryElem);
+
+                    const thoughtContentDiv = document.createElement('div');
+                    thoughtContentDiv.classList.add('thought-summary-content');
+                    if (isStreamingPlaceholder) {
+                        thoughtContentDiv.id = `streaming-thought-summary-${index}`; // ストリーミング用ID
+                        thoughtContentDiv.innerHTML = ''; // 初期は空
+                    } else {
+                        try {
+                            thoughtContentDiv.innerHTML = marked.parse(messageData.thoughtSummary || '');
+                        } catch (e) {
+                            console.error("Thought Summary Markdownパースエラー:", e);
+                            thoughtContentDiv.textContent = messageData.thoughtSummary || '';
+                        }
+                    }
+                    thoughtDetails.appendChild(thoughtContentDiv);
+                    messageDiv.appendChild(thoughtDetails); // メッセージ本文より前に追加
+                }
 
                 const contentDiv = document.createElement('div');
                 contentDiv.classList.add('message-content');
@@ -2731,7 +2858,6 @@
                 }
                 messageDiv.appendChild(contentDiv);
                 
-                const messageData = state.currentMessages[index]; // messageData をここで取得
                 if (role === 'model' && messageData && messageData.groundingMetadata &&
                     ( (messageData.groundingMetadata.groundingChunks && messageData.groundingMetadata.groundingChunks.length > 0) ||
                       (messageData.groundingMetadata.webSearchQueries && messageData.groundingMetadata.webSearchQueries.length > 0) )
@@ -2966,20 +3092,31 @@
             },
 
             // ストリーミング中のメッセージを更新
-            updateStreamingMessage(index, newChar) {
+            updateStreamingMessage(index, newChar, isThoughtSummary = false) { // newChar は実際には使わなくなる
                 const messageDiv = document.getElementById(`streaming-message-${index}`);
                 if (messageDiv && typeof marked !== 'undefined') {
-                    const contentDiv = messageDiv.querySelector('.message-content');
-                    if (contentDiv) {
+                    let targetContentDiv;
+                    let streamContent;
+
+                    if (isThoughtSummary) {
+                        targetContentDiv = messageDiv.querySelector(`#streaming-thought-summary-${index}`);
+                        streamContent = state.partialThoughtStreamContent; // stateから直接取得
+                    } else {
+                        targetContentDiv = messageDiv.querySelector('.message-content');
+                        streamContent = state.partialStreamContent; // stateから直接取得
+                    }
+
+                    if (targetContentDiv) {
                         try {
-                            // 部分的なコンテンツをMarkdownとしてパースして表示
-                            contentDiv.innerHTML = marked.parse(state.partialStreamContent || '');
+                            targetContentDiv.innerHTML = marked.parse(streamContent || '');
                         } catch (e) {
-                            console.error("ストリーミング更新中のMarkdownパースエラー:", e);
-                            contentDiv.textContent = state.partialStreamContent; // エラー時はテキストとして表示
+                            console.error(`ストリーミング更新中のMarkdownパースエラー (${isThoughtSummary ? 'Thought' : 'Content'}):`, e);
+                            targetContentDiv.textContent = streamContent;
                         }
                     }
-                    this.scrollToBottom(); // 更新のたびにスクロール
+                    if (!isThoughtSummary) {
+                        this.scrollToBottom();
+                    }
                 }
             },
 
@@ -2987,9 +3124,30 @@
             finalizeStreamingMessage(index) {
                 const messageDiv = document.getElementById(`streaming-message-${index}`);
                 if (messageDiv) {
+                    const finalMessageData = state.currentMessages[index];
+                    if (!finalMessageData) return;
+
+                    // Thought Summary の最終処理
+                    if (finalMessageData.thoughtSummary) {
+                        const thoughtContentDiv = messageDiv.querySelector(`#streaming-thought-summary-${index}`);
+                        if (thoughtContentDiv && typeof marked !== 'undefined') {
+                            try {
+                                thoughtContentDiv.innerHTML = marked.parse(finalMessageData.thoughtSummary || '');
+                            } catch (e) {
+                                console.error("Thought Summary ストリーミング完了時のMarkdownパースエラー:", e);
+                                thoughtContentDiv.textContent = finalMessageData.thoughtSummary || '';
+                            }
+                            thoughtContentDiv.removeAttribute('id'); // IDを削除
+                        } else if (thoughtContentDiv) {
+                            thoughtContentDiv.textContent = finalMessageData.thoughtSummary || '';
+                            thoughtContentDiv.removeAttribute('id');
+                        }
+                    }
+
+                    // 通常コンテンツの最終処理
                     const contentDiv = messageDiv.querySelector('.message-content');
                     // stateから最終的なコンテンツを取得
-                    const finalRawContent = state.currentMessages[index]?.content || '';
+                    const finalRawContent = finalMessageData.content || '';
                     if (contentDiv && typeof marked !== 'undefined') {
                          try {
                              // 最終コンテンツをMarkdownとしてパース
@@ -3190,6 +3348,7 @@
                 elements.presencePenaltyInput.value = state.settings.presencePenalty === null ? '' : state.settings.presencePenalty;
                 elements.frequencyPenaltyInput.value = state.settings.frequencyPenalty === null ? '' : state.settings.frequencyPenalty;
                 elements.thinkingBudgetInput.value = state.settings.thinkingBudget === null ? '' : state.settings.thinkingBudget;
+                elements.includeThoughtsToggle.checked = state.settings.includeThoughts; // Include Thoughts 設定を適用
                 elements.dummyUserInput.value = state.settings.dummyUser || '';
                 elements.dummyModelInput.value = state.settings.dummyModel || '';
                 elements.concatDummyModelCheckbox.checked = state.settings.concatDummyModel;
@@ -3594,12 +3753,20 @@
                 if (state.settings.presencePenalty !== null) finalGenerationConfig.presencePenalty = state.settings.presencePenalty;
                 if (state.settings.frequencyPenalty !== null) finalGenerationConfig.frequencyPenalty = state.settings.frequencyPenalty;
                 
-                // thinking budget 設定を追加
-                if (state.settings.thinkingBudget !== null && Number.isInteger(state.settings.thinkingBudget) && state.settings.thinkingBudget >= 0) {
-                    finalGenerationConfig.thinkingConfig = {
-                        "thinkingBudget": state.settings.thinkingBudget,
-                    };
-                    console.log(`Thinking Budget (${state.settings.thinkingBudget}) を有効にしてAPIを呼び出します。`);
+                // thinkingConfig 設定を更新
+                if (state.settings.thinkingBudget !== null || state.settings.includeThoughts) {
+                    finalGenerationConfig.thinkingConfig = finalGenerationConfig.thinkingConfig || {};
+                    if (state.settings.thinkingBudget !== null && Number.isInteger(state.settings.thinkingBudget) && state.settings.thinkingBudget >= 0) {
+                        finalGenerationConfig.thinkingConfig.thinkingBudget = state.settings.thinkingBudget;
+                        console.log(`Thinking Budget (${state.settings.thinkingBudget}) を有効にしてAPIを呼び出します。`);
+                    }
+                    if (state.settings.includeThoughts) { // Include Thoughts フラグをセット
+                        finalGenerationConfig.thinkingConfig.includeThoughts = true;
+                        console.log("Include Thoughts を有効にしてAPIを呼び出します。");
+                    }
+                    if (Object.keys(finalGenerationConfig.thinkingConfig).length === 0) {
+                        delete finalGenerationConfig.thinkingConfig;
+                    }
                 }
 
                 // リクエストボディを作成
@@ -3677,19 +3844,17 @@
             },
 
             // ストリーミングレスポンスを処理
-            async handleStreamingResponse(response) {
+            async *handleStreamingResponse(response) { // async * に変更
                  if (!response.body) {
                      throw new Error("レスポンスボディがありません。");
                  }
-                 // レスポンスボディをテキストとして読み取るリーダーを取得
                  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-                 let buffer = ''; // 未処理のチャンクを保持するバッファ
-                 let lastCandidateInfo = null; // 最後の候補者情報 (finishReasonなど)
-                 const processedChunks = [];
-                 let isCancelled = false; // キャンセルされたかどうかのフラグ
-                 let groundingMetadata = null; // groundingMetadata を保持する変数を追加
-                 let currentPartIndex = -1; // 現在処理中の part のインデックスを追跡
-                 let finalUsageMetadata = null; // usageMetadata を保持する変数を追加
+                 let buffer = '';
+                 let lastCandidateInfo = null;
+                 // processedContentChunks や processedThoughtChunks はここでは不要になる
+                 let isCancelled = false;
+                 let groundingMetadata = null;
+                 let finalUsageMetadata = null; // 最終的なusageMetadataを保持
 
                  try {
                      while (true) {
@@ -3723,42 +3888,61 @@
                              console.log("ストリーム終了 (done)");
                              // バッファに残っているデータを処理
                              if (buffer.trim()) {
-                                 processBuffer(buffer, true);
+                                 // バッファに残っているデータを処理し、yield する
+                                 const finalData = parseSseDataForYield(buffer.trim().substring(6));
+                                 if (finalData) yield finalData;
                              }
                              break; // ループを抜ける
                          }
 
                          // 受信したデータをバッファに追加
                          buffer += value;
-                         // バッファを処理してSSEメッセージを抽出
-                         buffer = processBuffer(buffer, false);
-                     } // whileループ終了
+                         // バッファを処理してSSEメッセージを抽出し、逐次 yield する
+                         let remainingBuffer = buffer;
+                         while (true) {
+                             const newlineIndex = remainingBuffer.indexOf('\n');
+                             if (newlineIndex === -1) {
+                                 buffer = remainingBuffer; // 未処理分をバッファに戻す
+                                 break;
+                             }
+                             const line = remainingBuffer.substring(0, newlineIndex).trim();
+                             remainingBuffer = remainingBuffer.substring(newlineIndex + 1);
 
+                             if (line.startsWith('data: ')) {
+                                 const chunkData = parseSseDataForYield(line.substring(6)); // 'data: ' を除いたJSON部分をパース
+                                 if (chunkData) {
+                                     // groundingMetadata と usageMetadata を更新
+                                     if (chunkData.groundingMetadata) groundingMetadata = chunkData.groundingMetadata;
+                                     if (chunkData.usageMetadata) finalUsageMetadata = chunkData.usageMetadata; // 常に最新で上書き
+                                     yield chunkData; // パースしたデータを yield
+                                 }
+                             } else if (line !== '') {
+                                 console.warn("データ以外のSSE行を無視:", line);
+                             }
+                             // ループの最後にバッファを更新
+                             if (remainingBuffer === '') {
+                                buffer = '';
+                                break;
+                             }
+                         }
+                     }
                      // 最終的なメタデータを取得
                      const finishReason = lastCandidateInfo?.finishReason;
                      const safetyRatings = lastCandidateInfo?.safetyRatings;
-                     const finalGroundingMetadata = groundingMetadata;
 
-                     // コンテンツなしで終了した場合の警告
-                     if (!isCancelled && processedChunks.length === 0 && (!finishReason || finishReason === "STOP")) {
-                         console.warn("ストリーミングがコンテンツなしで終了しました。");
-                     }
-
-                     console.log(`ストリーム処理終了。キャンセル: ${isCancelled}, 終了理由: ${finishReason}`);
-                     // 結果オブジェクトを返す
-                     return {
-                         processedChunks: processedChunks,
-                         finishReason: isCancelled ? 'ABORTED' : finishReason, // キャンセルされた場合は理由をABORTEDに
+                     // ストリームの最後にメタデータを yield する (識別子付きで)
+                     yield {
+                         type: 'metadata', // メタデータであることを示す
+                         finishReason: isCancelled ? 'ABORTED' : finishReason,
                          safetyRatings,
-                         groundingMetadata: finalGroundingMetadata,
-                         usageMetadata: finalUsageMetadata // usageMetadata を追加して返す
+                         groundingMetadata: groundingMetadata, // 最終的なgroundingMetadata
+                         usageMetadata: finalUsageMetadata // 最終的なusageMetadata
                      };
+
                  } catch (error) {
                      // ストリーム処理中のエラー
                      console.error("ストリームの読み取り/処理エラー:", error);
-                     // エラー発生時でも部分的なチャンクがあれば保持
-                     const partialChunksOnError = (error.message !== "リクエストがキャンセルされました.") ? processedChunks : [];
-                     throw new Error(`ストリーミング処理エラー: ${error.message || error}`, { cause: { originalError: error, partialChunks: partialChunksOnError } });
+                     throw new Error(`ストリーミング処理エラー: ${error.message || error}`, { cause: { originalError: error } });
                  } finally {
                      // ループ終了後、リーダーがまだ閉じておらず、キャンセルもされていない場合、クリーンアップのためにキャンセルを試みる
                      if (!reader.closed && !isCancelled) {
@@ -3767,88 +3951,63 @@
                      }
                  }
 
-                 // SSEメッセージを処理する内部関数
-                 function processBuffer(currentBuffer, isFinalChunk) {
-                     let remainingBuffer = currentBuffer;
-                     while (true) {
-                         const newlineIndex = remainingBuffer.indexOf('\n');
-                         if (newlineIndex === -1) { // 改行が見つからない
-                             // 最後のチャンクで、バッファが 'data: ' で始まる場合、それを処理
-                             if (isFinalChunk && remainingBuffer.trim().startsWith('data: ')) {
-                                 parseSseData(remainingBuffer.trim().substring(6));
-                                 remainingBuffer = ''; // バッファをクリア
-                             }
-                             break; // ループを抜ける
-                         }
-                         // 1行取り出す
-                         const line = remainingBuffer.substring(0, newlineIndex).trim();
-                         // 残りのバッファを更新
-                         remainingBuffer = remainingBuffer.substring(newlineIndex + 1);
-
-                         if (line.startsWith('data: ')) { // データ行の場合
-                             parseSseData(line.substring(6)); // 'data: ' を除いたJSON部分をパース
-                         } else if (line !== '') { // 空行以外の非データ行は無視 (警告表示)
-                             console.warn("データ以外のSSE行を無視:", line);
-                         }
-                     }
-                     return remainingBuffer; // 処理しきれなかった部分を返す
-                 }
-
-                 // SSEデータ (JSON) をパースする内部関数
-                 function parseSseData(jsonString) {
+                 // SSEデータ (JSON) をパースする内部関数 (yield するデータを返すように変更)
+                 function parseSseDataForYield(jsonString) {
                      try {
-                         const chunkData = JSON.parse(jsonString);
-                         // エラーメッセージが含まれている場合
-                         if (chunkData.error) {
-                             console.error("ストリーム内のエラーメッセージ:", chunkData.error);
-                             const errorMsg = `モデルエラー: ${chunkData.error.message || JSON.stringify(chunkData.error)}`;
-                             lastCandidateInfo = { error: chunkData.error, finishReason: 'ERROR' }; // 最後の情報をエラーとして記録
-                             throw new Error(errorMsg); // エラーを投げてストリーム処理を中断
+                         const chunkJson = JSON.parse(jsonString);
+                         if (chunkJson.error) {
+                             console.error("ストリーム内のエラーメッセージ:", chunkJson.error);
+                             const errorMsg = `モデルエラー: ${chunkJson.error.message || JSON.stringify(chunkJson.error)}`;
+                             lastCandidateInfo = { error: chunkJson.error, finishReason: 'ERROR' };
+                             // エラーも yield する (type: 'error' などで)
+                             return { type: 'error', error: chunkJson.error, message: errorMsg };
                          }
-                         // 候補者データが含まれている場合
-                         if (chunkData.candidates && chunkData.candidates.length > 0) {
-                             lastCandidateInfo = chunkData.candidates[0]; // 最後の候補者情報を更新
-                             
-                             // partsごとに解析
+
+                         let contentText = null;
+                         let thoughtText = null;
+                         let currentGroundingMetadata = null;
+                         let currentUsageMetadata = null; // このチャンクのusageMetadata
+
+                         if (chunkJson.candidates && chunkJson.candidates.length > 0) {
+                             lastCandidateInfo = chunkJson.candidates[0];
                              if (lastCandidateInfo?.content?.parts) {
-                                 lastCandidateInfo.content.parts.forEach((part, partIndex) => {
-                                     const textChunk = part.text;
-                                     if (typeof textChunk === 'string') {
-                                         // 新しい part に移ったら、区切りマーカー (null) を追加
-                                         // (ただし、最初の part の前には追加しない)
-                                         if (partIndex > currentPartIndex && currentPartIndex !== -1) {
-                                             processedChunks.push(null); // null を区切りとして挿入
-                                             console.log("Part 区切りマーカー挿入"); // デバッグ用
+                                 lastCandidateInfo.content.parts.forEach(part => {
+                                     if (typeof part.text === 'string') {
+                                         if (part.thought === true) {
+                                             thoughtText = (thoughtText || '') + part.text;
+                                         } else {
+                                             contentText = (contentText || '') + part.text;
                                          }
-                                         processedChunks.push(textChunk); // テキストチャンクを追加
-                                         currentPartIndex = partIndex; // 現在の part インデックスを更新
                                      }
                                  });
                              }
-                             
-                             // groundingMetadata を抽出・更新
                              if (lastCandidateInfo.groundingMetadata) {
-                                 // ストリーミングでメタデータが部分的に来る場合、結合が必要かもしれない
-                                 // ここでは単純に最新のもので上書きする例 (要検証)
-                                 groundingMetadata = lastCandidateInfo.groundingMetadata;
-                                 // console.log("ストリームチャンクから groundingMetadata を取得:", groundingMetadata); // デバッグ用
+                                 currentGroundingMetadata = lastCandidateInfo.groundingMetadata;
                              }
-                         } else if (chunkData.promptFeedback) { // プロンプトフィードバックの場合 (ブロックなど)
-                             console.warn("ストリーム内のプロンプトフィードバック:", chunkData.promptFeedback);
-                             // 安全性評価などを最後の情報として記録
-                             lastCandidateInfo = { finishReason: 'SAFETY', safetyRatings: chunkData.promptFeedback.safetyRatings };
-                         } else { // その他の予期しないデータ
-                             console.log("候補/エラー以外のストリームチャンク:", chunkData);
+                         } else if (chunkJson.promptFeedback) {
+                             console.warn("ストリーム内のプロンプトフィードバック:", chunkJson.promptFeedback);
+                             lastCandidateInfo = { finishReason: 'SAFETY', safetyRatings: chunkJson.promptFeedback.safetyRatings };
+                             // promptFeedbackも yield するか検討 (ここでは省略)
+                             return null; // または適切なデータを返す
                          }
 
-                         // usageMetadata をチェックして保持
-                         if (chunkData.usageMetadata) {
-                             finalUsageMetadata = chunkData.usageMetadata; // 最新のもので上書き or 結合が必要か確認
-                             console.log("Stream chunk contains usageMetadata:", finalUsageMetadata);
+                         if (chunkJson.usageMetadata) { // usageMetadataをチェック
+                             currentUsageMetadata = chunkJson.usageMetadata;
                          }
+
+                         if (contentText !== null || thoughtText !== null || currentGroundingMetadata || currentUsageMetadata) {
+                             return {
+                                 type: 'chunk', // 通常のチャンクであることを示す
+                                 contentText,
+                                 thoughtText,
+                                 groundingMetadata: currentGroundingMetadata, // このチャンクのgroundingMetadata
+                                 usageMetadata: currentUsageMetadata // このチャンクのusageMetadata
+                             };
+                         }
+                         return null; // 有効なデータがなければnull
                      } catch (parseError) {
-                         // JSONパースエラーは警告表示してスキップ
                          console.warn("ストリーム内の不正なJSONをスキップ:", jsonString, parseError);
+                         return null;
                      }
                  }
             }
@@ -4587,117 +4746,58 @@
                 }
             },
 
-            // テキストを1文字ずつタイプ表示 (ストリーミング風)
-            async typeCharacterByCharacter(processedChunks, messageIndex, signal, prefix = '') {
-                const speed = state.settings.streamingSpeed;
-                let accumulatedRawContent = prefix; // 初期値をprefixに
-                state.partialStreamContent = prefix; // 初期値をprefixに
-
-                // プレフィックスがあれば最初に表示
-                if (prefix) {
-                    uiUtils.updateStreamingMessage(messageIndex, ''); // プレフィックスを反映させるための初期更新
-                }
-
-                // 速度設定が無効なら一括表示 (プレフィックス含む)
-                if (!speed || speed <= 0) {
-                    accumulatedRawContent = prefix + processedChunks.map(chunk => chunk === null ? '\n\n' : chunk).join('');
-                    state.partialStreamContent = accumulatedRawContent;
-                    uiUtils.updateStreamingMessage(messageIndex, ''); // 一括でUI更新
-                    return accumulatedRawContent;
-                }
-
-                console.log(`タイピングエフェクト速度: ${speed}ms`);
-                // チャンクと文字をループ
-                for (const chunk of processedChunks) { // processedChunks をループ
-                    if (signal.aborted) {
-                        console.log("タイピング中断");
-                        return accumulatedRawContent;
-                    }
-
-                    // チャンクが区切りマーカー (null) かチェック
-                    if (chunk === null) {
-                        const separator = '\n\n';
-                        accumulatedRawContent += separator;
-                        state.partialStreamContent = accumulatedRawContent;
-                        // 区切り文字自体は表示しないが、UI更新はトリガーする
-                        uiUtils.updateStreamingMessage(messageIndex, '');
-                        // 区切り文字のための待機は不要かもしれない (お好みで await sleep(speed) を追加)
-                        console.log("タイピング: 区切り (\\n\\n) 追加"); // デバッグ用
-                    } else if (typeof chunk === 'string') { // 文字列チャンクの場合
-                        for (const char of chunk) {
-                            if (signal.aborted) {
-                                console.log("タイピング中断");
-                                return accumulatedRawContent;
-                            }
-                            accumulatedRawContent += char;
-                            state.partialStreamContent = accumulatedRawContent;
-                            uiUtils.updateStreamingMessage(messageIndex, char);
-                            await sleep(speed);
-                        }
-                    }
-                }
-                console.log("タイピングエフェクト完了");
-                return accumulatedRawContent; // 全てのテキストを返す
-            },
-
             // 送信処理 (リトライ時も使用)
             async handleSend(isRetry = false, retryUserMessageIndex = -1) {
-                // (既存の編集/送信中/SP編集チェックは省略)
+                // --- 1. 送信前チェック ---
                 if (state.editingMessageIndex !== null) { await uiUtils.showCustomAlert("他のメッセージを編集中です。"); return; }
                 if (state.isEditingSystemPrompt) { await uiUtils.showCustomAlert("システムプロンプトを編集中です。"); return; }
 
-                // 送信するテキストと添付ファイルを取得
                 let text = '';
                 let attachmentsToSend = [];
                 if (isRetry) {
-                    // リトライ時は retryUserMessageIndex を使って state.currentMessages から取得
                     const retryUserMessage = state.currentMessages[retryUserMessageIndex];
                     if (!retryUserMessage || retryUserMessage.role !== 'user') {
                         console.error("リトライ対象のユーザーメッセージが見つかりません。", retryUserMessageIndex);
-                        uiUtils.setSendingState(false); // 送信状態を解除
+                        uiUtils.setSendingState(false);
                         return;
                     }
                     text = retryUserMessage.content || '';
-                    attachmentsToSend = retryUserMessage.attachments ? [...retryUserMessage.attachments] : []; // コピーして使用
+                    attachmentsToSend = retryUserMessage.attachments ? [...retryUserMessage.attachments] : [];
                 } else {
-                    // 通常送信時
                     text = elements.userInput.value.trim();
-                    attachmentsToSend = [...state.pendingAttachments]; // 保留中のファイルを使用
+                    attachmentsToSend = [...state.pendingAttachments];
                 }
 
-                // 送信中、またはテキストも添付ファイルもない場合は何もしない
                 if (state.isSending || (!text && attachmentsToSend.length === 0)) {
                     if(!text && attachmentsToSend.length === 0) console.log("入力も添付ファイルもありません。");
                     return;
                 }
                 if (!state.settings.apiKey) { await uiUtils.showCustomAlert("APIキーが設定されていません。設定画面を開きます。"); uiUtils.showScreen('settings'); return; }
 
+                // --- 2. 送信状態設定とUI準備 ---
                 uiUtils.setSendingState(true);
-                state.partialStreamContent = '';
+                // state.partialStreamContent と state.partialThoughtStreamContent は後で初期化
 
-                // userMessageIndex はリトライ時は引数から、通常送信時は追加後に決定
                 let userMessageIndex = isRetry ? retryUserMessageIndex : -1;
                 let existingSiblingGroupId = null;
                 let firstResponseIndexForRetry = -1;
                 let siblingGroupIdToUse = null;
 
-                // 通常送信の場合、ユーザーメッセージをリストとUIに追加
                 if (!isRetry) {
                     const userMessage = {
                         role: 'user',
                         content: text,
                         timestamp: Date.now(),
-                        attachments: attachmentsToSend // 添付ファイルを追加
+                        attachments: attachmentsToSend
                     };
                     state.currentMessages.push(userMessage);
-                    userMessageIndex = state.currentMessages.length - 1; // ここでインデックス確定
+                    userMessageIndex = state.currentMessages.length - 1;
                     uiUtils.appendMessage(userMessage.role, userMessage.content, userMessageIndex, false, null, userMessage.attachments);
                     elements.userInput.value = '';
-                    state.pendingAttachments = []; // 保留中の添付ファイルをクリア
+                    state.pendingAttachments = [];
                     uiUtils.adjustTextareaHeight();
                     uiUtils.scrollToBottom();
                 } else {
-                    // リトライの場合の siblingGroupId 決定ロジック (変更なし、userMessageIndex を使用)
                     console.log("リトライ処理開始 (handleSend内):", state.currentMessages[userMessageIndex]);
                     let siblingStartIndex = userMessageIndex + 1;
                     while (siblingStartIndex < state.currentMessages.length && state.currentMessages[siblingStartIndex].role !== 'model') {
@@ -4723,13 +4823,7 @@
                     }
                 }
 
-                // APIに送信するメッセージリストを準備 (state.currentMessages を使用)
-                //    リトライ時は userMessageIndex まで、通常時は全体
-                const messagesToProcess = isRetry
-                    ? state.currentMessages.slice(0, userMessageIndex + 1)
-                    : [...state.currentMessages];
-
-                // (既存の送信前チャット保存ロジックは省略)
+                // --- 3. 送信前チャット保存 ---
                 try {
                     let titleToSave = null;
                     if(state.currentChatId) {
@@ -4748,7 +4842,11 @@
                     uiUtils.displayError("チャットの保存に失敗しましたが、送信を試みます。", false);
                 }
 
-                // APIリクエスト用の形式に変換 (messagesToProcess を使用)
+                // --- 4. APIリクエスト準備 ---
+                const messagesToProcess = isRetry
+                    ? state.currentMessages.slice(0, userMessageIndex + 1)
+                    : [...state.currentMessages];
+
                 const apiMessages = messagesToProcess
                     .filter(msg => {
                         if (msg.role === 'user') return true;
@@ -4773,44 +4871,116 @@
                         return { role: msg.role, parts: parts };
                     });
 
-                // (既存のダミープロンプト、generationConfig、systemInstruction生成ロジックは省略)
                 const dummyUserText = state.settings.dummyUser?.trim();
                 const dummyModelText = state.settings.dummyModel?.trim();
                 if (dummyUserText) apiMessages.push({ role: 'user', parts: [{ text: dummyUserText }] });
                 if (dummyModelText) apiMessages.push({ role: 'model', parts: [{ text: dummyModelText }] });
+
                 const generationConfig = {};
                 if (state.settings.temperature !== null) generationConfig.temperature = state.settings.temperature;
                 if (state.settings.maxTokens !== null) generationConfig.maxOutputTokens = state.settings.maxTokens;
                 if (state.settings.topK !== null) generationConfig.topK = state.settings.topK;
                 if (state.settings.topP !== null) generationConfig.topP = state.settings.topP;
+
                 const systemInstruction = state.currentSystemPrompt?.trim()
                     ? { role: "system", parts: [{ text: state.currentSystemPrompt.trim() }] }
                     : null;
 
+                // --- 5. API呼び出しと応答処理 ---
                 let modelResponseRawContent = '';
-                let modelResponseMetadata = {};
-                let groundingMetadata = null;
-                let usageMetadata = null; // usageMetadata を保持する変数を追加
-                // modelMessageIndex の決定は不要になった (応答は常に末尾に追加される)
+                let modelThoughtSummaryContent = '';
+                let modelResponseMetadata = {}; // ここには最終的なメタデータが入る
+                let currentGroundingMetadata = null; // ストリーム中の最新のgroundingMetadata
+                let finalUsageMetadataFromStream = null; // ストリーム中の最新のusageMetadata
 
                 try {
-                    // (既存のAPI呼び出し、ストリーミング/非ストリーミング処理は省略)
                     const response = await apiUtils.callGeminiApi(apiMessages, generationConfig, systemInstruction);
                     const dummyModelPrefix = (state.settings.concatDummyModel && state.settings.dummyModel) ? state.settings.dummyModel : '';
-                    
+                    state.partialStreamContent = dummyModelPrefix; // プレフィックスを初期値に設定
+                    state.partialThoughtStreamContent = '';
+
                     if (state.settings.streamingOutput) {
                         const tempPlaceholderIndex = state.currentMessages.length;
-                        uiUtils.appendMessage('model', '', tempPlaceholderIndex, true);
-                        const streamResult = await apiUtils.handleStreamingResponse(response);
-                        modelResponseMetadata = { finishReason: streamResult.finishReason, safetyRatings: streamResult.safetyRatings };
-                        groundingMetadata = streamResult.groundingMetadata;
-                        usageMetadata = streamResult.usageMetadata; // ストリーミング結果から取得
-                        modelResponseRawContent = await this.typeCharacterByCharacter(streamResult.processedChunks, tempPlaceholderIndex, state.abortController.signal, dummyModelPrefix);
+
+                        // ストリーミングプレースホルダーのDOMを直接生成
+                        const placeholderMessageDiv = document.createElement('div');
+                        placeholderMessageDiv.classList.add('message', 'model');
+                        placeholderMessageDiv.id = `streaming-message-${tempPlaceholderIndex}`;
+
+                        if (state.settings.includeThoughts) {
+                            const thoughtDetails = document.createElement('details');
+                            thoughtDetails.classList.add('thought-summary-details');
+                            const thoughtSummaryElem = document.createElement('summary');
+                            thoughtSummaryElem.textContent = '思考プロセス';
+                            thoughtDetails.appendChild(thoughtSummaryElem);
+                            const thoughtContentDiv = document.createElement('div');
+                            thoughtContentDiv.classList.add('thought-summary-content');
+                            thoughtContentDiv.id = `streaming-thought-summary-${tempPlaceholderIndex}`;
+                            thoughtDetails.appendChild(thoughtContentDiv);
+                            placeholderMessageDiv.appendChild(thoughtDetails);
+                        }
+                        const contentDiv = document.createElement('div');
+                        contentDiv.classList.add('message-content');
+                        placeholderMessageDiv.appendChild(contentDiv);
+                        elements.messageContainer.appendChild(placeholderMessageDiv); // DOMに追加
+
+                        const streamSpeed = state.settings.streamingSpeed; // 表示速度を取得
+
+                        // 非同期ジェネレータを for await...of で処理
+                        for await (const streamData of apiUtils.handleStreamingResponse(response)) {
+                            if (state.abortController?.signal.aborted) {
+                                modelResponseMetadata.finishReason = 'ABORTED';
+                                throw new Error("リクエストがキャンセルされました。");
+                            }
+
+                            if (streamData.type === 'chunk') { // 通常のチャンク
+                                if (streamData.thoughtText) {
+                                    // 思考プロセスを1文字ずつ表示
+                                    for (const char of streamData.thoughtText) {
+                                        if (state.abortController?.signal.aborted) break; // ループ中断
+                                        state.partialThoughtStreamContent += char;
+                                        uiUtils.updateStreamingMessage(tempPlaceholderIndex, char, true); // newCharは実際には使わない
+                                        if (streamSpeed > 0) await sleep(streamSpeed);
+                                    }
+                                }
+                                if (streamData.contentText) {
+                                    // 通常コンテンツを1文字ずつ表示
+                                    for (const char of streamData.contentText) {
+                                        if (state.abortController?.signal.aborted) break; // ループ中断
+                                        state.partialStreamContent += char;
+                                        uiUtils.updateStreamingMessage(tempPlaceholderIndex, char, false); // newCharは実際には使わない
+                                        if (streamSpeed > 0) await sleep(streamSpeed);
+                                    }
+                                }
+                                if (state.abortController?.signal.aborted) { // 内部ループ中断後のチェック
+                                    modelResponseMetadata.finishReason = 'ABORTED';
+                                    throw new Error("リクエストがキャンセルされました。");
+                                }
+                                if (streamData.groundingMetadata) currentGroundingMetadata = streamData.groundingMetadata;
+                                if (streamData.usageMetadata) finalUsageMetadataFromStream = streamData.usageMetadata;
+
+                            } else if (streamData.type === 'metadata') { // ストリーム終了時のメタデータ
+                                modelResponseMetadata = {
+                                    finishReason: streamData.finishReason,
+                                    safetyRatings: streamData.safetyRatings,
+                                };
+                                if (streamData.groundingMetadata) currentGroundingMetadata = streamData.groundingMetadata;
+                                if (streamData.usageMetadata) finalUsageMetadataFromStream = streamData.usageMetadata;
+                                console.log("ストリーム終了メタデータ受信:", streamData);
+                                break;
+                            } else if (streamData.type === 'error') { // ストリーム内エラー
+                                modelResponseMetadata.finishReason = 'ERROR';
+                                modelResponseMetadata.error = streamData.error;
+                                throw new Error(streamData.message || "ストリーム内でエラーが発生しました。");
+                            }
+                        }
+                        modelThoughtSummaryContent = state.partialThoughtStreamContent;
+                        modelResponseRawContent = state.partialStreamContent;
+
                         if (modelResponseMetadata.finishReason === 'ABORTED' || state.abortController?.signal.aborted) {
                             throw new Error("リクエストがキャンセルされました。");
                         }
-                        const placeholderElement = document.getElementById(`streaming-message-${tempPlaceholderIndex}`);
-                        if (placeholderElement) placeholderElement.remove();
+
                     } else {
                         const data = await response.json();
                         console.log("API応答 (非ストリーミング):", data);
@@ -4818,13 +4988,22 @@
                         let rawContentFromApi = "";
                         if (candidate) {
                             modelResponseMetadata = { finishReason: candidate.finishReason, safetyRatings: candidate.safetyRatings };
-                            rawContentFromApi = candidate.content?.parts?.map(p => p.text || "").join('\n\n') || "";
-                            groundingMetadata = candidate.groundingMetadata || null;
-                            usageMetadata = data.usageMetadata || null; // 非ストリーミング結果から取得
+                            candidate.content?.parts?.forEach(part => {
+                                if (part.thought === true) {
+                                    modelThoughtSummaryContent += (part.text || "") + "\n\n";
+                                } else {
+                                    rawContentFromApi += (part.text || "") + "\n\n";
+                                }
+                            });
+                            modelThoughtSummaryContent = modelThoughtSummaryContent.trim();
+                            rawContentFromApi = rawContentFromApi.trim();
+
+                            currentGroundingMetadata = candidate.groundingMetadata || null;
+                            finalUsageMetadataFromStream = data.usageMetadata || null;
                             if (candidate.finishReason && candidate.finishReason !== "STOP" && candidate.finishReason !== "MAX_TOKENS") {
                                 rawContentFromApi += `\n\n(理由: ${candidate.finishReason})`;
                             }
-                            if (!rawContentFromApi && candidate.finishReason === "STOP") {
+                            if (!rawContentFromApi && candidate.finishReason === "STOP" && !modelThoughtSummaryContent) {
                                 rawContentFromApi = "(応答が空です)";
                             }
                         } else {
@@ -4836,25 +5015,23 @@
                             } else {
                                 modelResponseMetadata.finishReason = 'ERROR';
                             }
-                            usageMetadata = data.usageMetadata || null; // エラー時も取得試行
+                            finalUsageMetadataFromStream = data.usageMetadata || null;
                         }
                         modelResponseRawContent = dummyModelPrefix + rawContentFromApi;
                     }
 
-
-                    if (modelResponseRawContent || modelResponseMetadata.finishReason) {
+                    if (modelResponseRawContent || modelThoughtSummaryContent || modelResponseMetadata.finishReason) {
                          const newModelMessage = {
                              role: 'model',
                              content: modelResponseRawContent,
+                             thoughtSummary: modelThoughtSummaryContent || null,
                              timestamp: Date.now(),
                              ...modelResponseMetadata,
-                             groundingMetadata: groundingMetadata,
-                             usageMetadata: usageMetadata // usageMetadata を追加
+                             groundingMetadata: currentGroundingMetadata,
+                             usageMetadata: finalUsageMetadataFromStream
                          };
 
-                         // カスケード関連フラグの設定 (userMessageIndex を使用)
-                         const targetUserIndexForCascade = userMessageIndex; // リトライ時も通常時もこれでOK
-
+                         const targetUserIndexForCascade = userMessageIndex;
                          if (targetUserIndexForCascade !== -1) {
                              if (siblingGroupIdToUse === null) {
                                  siblingGroupIdToUse = `gid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -4871,30 +5048,45 @@
                              }
                              console.log(`応答にフラグ設定: isCascaded=true, isSelected=true, siblingGroupId=${newModelMessage.siblingGroupId}`);
                          }
-                         // ---------------------------------
 
                          state.currentMessages.push(newModelMessage);
-                         uiUtils.renderChatMessages();
+                         if (state.settings.streamingOutput) {
+                             uiUtils.finalizeStreamingMessage(state.currentMessages.length - 1);
+                         } else {
+                            uiUtils.renderChatMessages();
+                         }
                          await dbUtils.saveChat();
                          console.log("モデル応答保存完了");
                     } else {
                         console.log("モデル応答コンテンツがないため保存しません。");
+                         if (state.settings.streamingOutput) {
+                            const tempPlaceholderIndex = state.currentMessages.length; // このインデックスは実際には使われないが、ID生成の元になった値
+                            const placeholderElement = document.getElementById(`streaming-message-${tempPlaceholderIndex}`);
+                            if (placeholderElement) placeholderElement.remove();
+                         }
                     }
-                } catch (error) { // APIエラーハンドリング
-                    // (既存のエラー処理、部分コンテンツ保存、カスケードフラグ設定は省略)
+                } catch (error) {
                     console.error("Gemini呼び出し/処理中のエラー:", error);
-                    const isAbort = error.message === "リクエストがキャンセルされました。";
+                    const isAbort = error.message === "リクエストがキャンセルされました。" || modelResponseMetadata.finishReason === 'ABORTED';
                     const displayErrorMessage = isAbort ? error.message : (error.message || "不明なエラーが発生しました");
-                    const partialRawContent = state.partialStreamContent || error.cause?.partialChunks?.join('');
-                    if (partialRawContent && state.settings.streamingOutput) {
-                         const finalPartialContent = partialRawContent + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})`;
+
+                    const partialThoughtContentOnError = state.partialThoughtStreamContent;
+                    const partialContentOnError = state.partialStreamContent;
+
+                    if ((partialContentOnError || partialThoughtContentOnError) && state.settings.streamingOutput) {
+                         const finalPartialContent = partialContentOnError + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})`;
+                         const finalPartialThought = partialThoughtContentOnError ? partialThoughtContentOnError + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})` : null;
+
                          const partialMessage = {
                              role: 'model',
                              content: finalPartialContent,
+                             thoughtSummary: finalPartialThought,
                              timestamp: Date.now(),
                              error: true,
                              finishReason: isAbort ? 'ABORTED' : (modelResponseMetadata.finishReason || 'ERROR'),
-                             ...(modelResponseMetadata.safetyRatings && { safetyRatings: modelResponseMetadata.safetyRatings })
+                             ...(modelResponseMetadata.safetyRatings && { safetyRatings: modelResponseMetadata.safetyRatings }),
+                             groundingMetadata: currentGroundingMetadata,
+                             usageMetadata: finalUsageMetadataFromStream
                          };
                          if (isRetry && isAbort) {
                              if (siblingGroupIdToUse === null) {
@@ -4915,20 +5107,31 @@
                          }
                          state.currentMessages.push(partialMessage);
                          try {
+                             if (state.settings.streamingOutput) {
+                                 uiUtils.finalizeStreamingMessage(state.currentMessages.length - 1);
+                             } else {
+                                 uiUtils.renderChatMessages();
+                             }
                              await dbUtils.saveChat();
                              console.log("部分的なメッセージ状態を保存しました。");
-                             uiUtils.renderChatMessages();
                          } catch (saveError) {
                              console.error("部分メッセージの保存失敗:", saveError);
                              uiUtils.displayError(displayErrorMessage, !isAbort);
                          }
                     } else {
+                        if (state.settings.streamingOutput && !isAbort) {
+                            const tempPlaceholderIndex = state.currentMessages.length;
+                            const placeholderElement = document.getElementById(`streaming-message-${tempPlaceholderIndex}`);
+                            if (placeholderElement) placeholderElement.remove();
+                        }
                         uiUtils.displayError(displayErrorMessage, !isAbort);
                     }
                 } finally {
+                    // --- 6. 送信後処理 ---
                     uiUtils.setSendingState(false);
                     state.abortController = null;
                     state.partialStreamContent = '';
+                    state.partialThoughtStreamContent = '';
                     uiUtils.scrollToBottom();
                     // 送信完了後にも念のためバッジ状態を更新
                     uiUtils.updateAttachmentBadgeVisibility();
@@ -5178,6 +5381,7 @@
                      presencePenalty: elements.presencePenaltyInput.value === '' ? null : parseFloat(elements.presencePenaltyInput.value),
                      frequencyPenalty: elements.frequencyPenaltyInput.value === '' ? null : parseFloat(elements.frequencyPenaltyInput.value),
                      thinkingBudget: elements.thinkingBudgetInput.value === '' ? null : parseInt(elements.thinkingBudgetInput.value, 10),
+                     includeThoughts: elements.includeThoughtsToggle.checked, // Include Thoughts 設定を取得
                      dummyUser: elements.dummyUserInput.value.trim(),
                      dummyModel: elements.dummyModelInput.value.trim(),
                      concatDummyModel: elements.concatDummyModelCheckbox.checked,
