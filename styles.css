@@ -266,6 +266,8 @@ label {
     margin: 0;
     margin-right: auto; /* 後続要素を右に寄せる */
 }
+
+
 .header-button {
     background: none;
     border: none;
@@ -312,10 +314,10 @@ label {
     background-color: var(--bg-button-save-hover);
 }
 body.dark-mode .header-save-button {
-     background-color: var(--bg-button-save);
+    background-color: var(--bg-button-save);
 }
 body.dark-mode .header-save-button:hover:not(:disabled) {
-     background-color: var(--bg-button-save-hover);
+    background-color: var(--bg-button-save-hover);
 }
 .header-notice {
     font-size: 11px;
@@ -680,9 +682,9 @@ body.dark-mode #chat-screen::before {
 }
 .message.editing .message-actions,
 .message.editing .message-cascade-controls { /* 編集中は上下のコントロールも非表示 */
-     opacity: 0;
-     pointer-events: none;
-     display: none !important; /* 確実に非表示 */
+    opacity: 0;
+    pointer-events: none;
+    display: none !important; /* 確実に非表示 */
 }
 .message-edit-area {
     margin-top: 5px;
@@ -832,12 +834,12 @@ body.dark-mode #loading-indicator {
 /* --- 履歴画面 --- */
 /* 履歴画面自体は背景画像なし */
 #history-screen {
-     background-color: var(--bg-primary); /* 自身の背景色を確保 */
-     transition: transform 0.3s ease-in-out; /* スワイプアニメーション */
+    background-color: var(--bg-primary); /* 自身の背景色を確保 */
+    transition: transform 0.3s ease-in-out; /* スワイプアニメーション */
 }
 #history-screen .main-content {
-     background-color: transparent; /* screenの背景色が見えるように */
-     /* touch-action: pan-y; */ /* 上部で指定済み */
+    background-color: transparent; /* screenの背景色が見えるように */
+    /* touch-action: pan-y; */ /* 上部で指定済み */
 }
 
 .history-list {
@@ -897,7 +899,7 @@ body.dark-mode #loading-indicator {
     cursor: default; /* ボタン以外はクリックを透過 */
 }
 .history-item-actions button {
-     cursor: pointer;
+    cursor: pointer;
 }
 .history-item-actions .js-edit-title-btn {
     background-color: var(--bg-button-edit);
@@ -913,7 +915,7 @@ body.dark-mode #loading-indicator {
 .history-item-actions .js-export-btn:hover { background-color: var(--bg-button-export-hover); }
 
 .js-history-item-template {
-     display: none !important; /* テンプレートは非表示 */
+    display: none !important; /* テンプレートは非表示 */
 }
 #no-history-message {
     text-align: center;
@@ -924,12 +926,12 @@ body.dark-mode #loading-indicator {
 /* --- 設定画面 --- */
 /* 設定画面自体は背景画像なし */
 #settings-screen {
-     background-color: var(--bg-primary); /* 自身の背景色を確保 */
-     transition: transform 0.3s ease-in-out; /* スワイプアニメーション */
+    background-color: var(--bg-primary); /* 自身の背景色を確保 */
+    transition: transform 0.3s ease-in-out; /* スワイプアニメーション */
 }
- #settings-screen .main-content {
-     background-color: transparent; /* screenの背景色が見えるように */
-     /* touch-action: pan-y; */ /* 上部で指定済み */
+    #settings-screen .main-content {
+    background-color: transparent; /* screenの背景色が見えるように */
+    /* touch-action: pan-y; */ /* 上部で指定済み */
 }
 
 .settings-group {
@@ -1050,65 +1052,65 @@ body.dark-mode #loading-indicator {
 
 /* --- OSのカラースキームを優先 --- */
 @media (prefers-color-scheme: dark) {
-  body:not(.light-mode-forced) {
-    /* デフォルトでダークモード変数を適用 */
-    --bg-primary: #1a1a1a;
-    --bg-secondary: #101010;
-    --bg-tertiary: #252525;
-    --bg-input: #303030;
-    --bg-user-message: #056162;
-    --bg-model-message: #3a3a3c;
-    --bg-system-message: #2a3a4a; /* システムプロンプト用 */
-    --bg-error-message: #5c1c1c;
-    --bg-button: #007aff;
-    --bg-button-hover: #005ecb;
-    --bg-button-disabled: #4a5a70;
-    --bg-button-action: #666666;
-    --bg-button-action-hover: #888888;
-    --bg-button-delete: #ff3b30;
-    --bg-button-delete-hover: #d12c23;
-    --bg-button-retry: #34c759;
-    --bg-button-retry-hover: #249a41;
-    --bg-button-edit: #ff9500;
-    --bg-button-edit-hover: #d17d00;
-    --bg-button-duplicate: #8e8e93;
-    --bg-button-duplicate-hover: #6b6b70;
-    --bg-button-export: #0a84ff;
-    --bg-button-export-hover: #0069d1;
-    --bg-button-save: #30d158;
-    --bg-button-save-hover: #24a345;
-    --bg-button-cancel: #ff453a;
-    --bg-button-cancel-hover: #d1332b;
-    --bg-button-update: #0a84ff;
-    --bg-button-update-hover: #0069d1;
-    --bg-header: #007aff;
-    --bg-message-actions: rgba(50, 50, 50, 0.8);
-    /* --bg-overlay-dark は body.dark-mode で定義済み */
-    /* カスケードコントロール用 (ダーク) */
-    --bg-cascade-button: var(--bg-button-action);
-    --bg-cascade-button-hover: var(--bg-button-action-hover);
-    --bg-cascade-delete-button: var(--bg-button-delete);
-    --bg-cascade-delete-button-hover: var(--bg-button-delete-hover);
-    --text-cascade-indicator: var(--text-secondary);
+    body:not(.light-mode-forced) {
+        /* デフォルトでダークモード変数を適用 */
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #101010;
+        --bg-tertiary: #252525;
+        --bg-input: #303030;
+        --bg-user-message: #056162;
+        --bg-model-message: #3a3a3c;
+        --bg-system-message: #2a3a4a; /* システムプロンプト用 */
+        --bg-error-message: #5c1c1c;
+        --bg-button: #007aff;
+        --bg-button-hover: #005ecb;
+        --bg-button-disabled: #4a5a70;
+        --bg-button-action: #666666;
+        --bg-button-action-hover: #888888;
+        --bg-button-delete: #ff3b30;
+        --bg-button-delete-hover: #d12c23;
+        --bg-button-retry: #34c759;
+        --bg-button-retry-hover: #249a41;
+        --bg-button-edit: #ff9500;
+        --bg-button-edit-hover: #d17d00;
+        --bg-button-duplicate: #8e8e93;
+        --bg-button-duplicate-hover: #6b6b70;
+        --bg-button-export: #0a84ff;
+        --bg-button-export-hover: #0069d1;
+        --bg-button-save: #30d158;
+        --bg-button-save-hover: #24a345;
+        --bg-button-cancel: #ff453a;
+        --bg-button-cancel-hover: #d1332b;
+        --bg-button-update: #0a84ff;
+        --bg-button-update-hover: #0069d1;
+        --bg-header: #007aff;
+        --bg-message-actions: rgba(50, 50, 50, 0.8);
+        /* --bg-overlay-dark は body.dark-mode で定義済み */
+        /* カスケードコントロール用 (ダーク) */
+        --bg-cascade-button: var(--bg-button-action);
+        --bg-cascade-button-hover: var(--bg-button-action-hover);
+        --bg-cascade-delete-button: var(--bg-button-delete);
+        --bg-cascade-delete-button-hover: var(--bg-button-delete-hover);
+        --text-cascade-indicator: var(--text-secondary);
 
-    --text-primary: #e0e0e0;
-    --text-secondary: #aaaaaa;
-    --text-light: #ffffff;
-    --text-disabled: #666666;
-    --text-error: #ff8a80;
-    --text-link: #00aaff;
-    --text-placeholder: #777777;
-    --text-system: #ccc; /* システムプロンプト用 */
+        --text-primary: #e0e0e0;
+        --text-secondary: #aaaaaa;
+        --text-light: #ffffff;
+        --text-disabled: #666666;
+        --text-error: #ff8a80;
+        --text-link: #00aaff;
+        --text-placeholder: #777777;
+        --text-system: #ccc; /* システムプロンプト用 */
 
-    --border-primary: #444444;
-    --border-secondary: #555555;
-    --border-tertiary: #333333;
-    --border-danger: #7a2e35;
-    --border-system: #4682b4; /* システムプロンプト用 */
+        --border-primary: #444444;
+        --border-secondary: #555555;
+        --border-tertiary: #333333;
+        --border-danger: #7a2e35;
+        --border-system: #4682b4; /* システムプロンプト用 */
 
-    --shadow-primary: rgba(255, 255, 255, 0.1);
-    --shadow-secondary: rgba(0, 0, 0, 0.5);
-  }
+        --shadow-primary: rgba(255, 255, 255, 0.1);
+        --shadow-secondary: rgba(0, 0, 0, 0.5);
+    }
 }
 
 /* --- Markdown固有スタイル --- */
@@ -1145,8 +1147,8 @@ body.dark-mode #loading-indicator {
     margin-bottom: 0.3em;
 }
 .message-content li > ul, .message-content li > ol {
-     margin-top: 0.3em;
-     margin-bottom: 0.3em;
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
 }
 .message-content pre {
     background-color: var(--bg-secondary);
@@ -1161,18 +1163,18 @@ body.dark-mode #loading-indicator {
 }
 /* ユーザーメッセージの<pre>は背景色透過が必要 */
 .message.user .message-content pre {
-     background-color: transparent;
-     padding: 0;
-     margin: 0;
-     border: none;
-     border-radius: 0;
-     color: inherit;
-     font-family: inherit;
-     font-size: inherit;
-     line-height: inherit;
-     white-space: pre-wrap;
-     word-wrap: break-word;
-     overflow-x: visible;
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-x: visible;
 }
 .message-content code:not(pre > code) { /* インラインコード */
     background-color: var(--bg-secondary);
@@ -1246,7 +1248,7 @@ body.dark-mode .message-content pre {
     border-color: var(--border-primary);
     color: var(--text-secondary);
 }
- body.dark-mode .message-content code:not(pre > code) {
+body.dark-mode .message-content code:not(pre > code) {
     background-color: var(--bg-tertiary);
     border-color: var(--border-primary);
     color: var(--text-secondary);
@@ -1255,9 +1257,9 @@ body.dark-mode .message-content blockquote {
     border-left-color: var(--border-primary);
     color: var(--text-secondary);
 }
- body.dark-mode .message-content a {
+body.dark-mode .message-content a {
     color: var(--text-link);
- }
+    }
 body.dark-mode .message-content table,
 body.dark-mode .message-content th,
 body.dark-mode .message-content td {
@@ -1350,7 +1352,7 @@ body.dark-mode .custom-dialog::backdrop {
 .custom-dialog .dialog-ok-btn:hover:not(:disabled) {
     background-color: var(--bg-button-hover);
 }
- .custom-dialog .dialog-cancel-btn {
+.custom-dialog .dialog-cancel-btn {
     background-color: var(--bg-button-action);
     color: var(--text-light);
 }

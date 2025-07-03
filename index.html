@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeminiPWA</title>
+    <title>GeminiPWA (FE4LC)</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" id="theme-color-meta" content="#4a90e2">
-
+    <link rel="stylesheet" href="styles.css">
     <script src="marked.js"></script>
 </head>
 <body>
@@ -18,6 +18,8 @@
                 <button id="goto-history-btn" class="header-button" aria-label="履歴一覧へ">☰</button>
                 <h1 id="chat-title">新規チャット</h1>
                 <button id="new-chat-btn" class="new-chat-button" title="新規チャットを開始">新規</button>
+                <button id="scroll-to-top-btn" class="header-button" aria-label="最上部へ移動" title="最上部へ移動">🔼</button>
+                <button id="scroll-to-bottom-btn" class="header-button" aria-label="最下部へ移動" title="最下部へ移動">🔽</button>
                 <button id="goto-settings-btn" class="header-button" aria-label="設定へ">⚙</button>
             </header>
             <main class="main-content">
@@ -184,9 +186,17 @@
 
                 <div class="settings-group">
                    <h3>アドバンスド</h3>
+                   <label class="checkbox-label">
+                       <input type="checkbox" id="enable-dummy-user-toggle">
+                       ダミー User プロンプトを有効にする
+                   </label>
                    <label for="dummy-user">ダミー User プロンプト (送信時のみ追加):</label>
                    <textarea id="dummy-user" placeholder="API送信直前に user ロールとして履歴末尾に追加されます" aria-label="ダミー User プロンプト"></textarea>
 
+                   <label class="checkbox-label">
+                       <input type="checkbox" id="enable-dummy-model-toggle">
+                       ダミー Model プロンプトを有効にする
+                   </label>
                    <label for="dummy-model">ダミー Model プロンプト (送信時のみ追加):</label>
                    <textarea id="dummy-model" placeholder="API送信直前に model ロールとして履歴最末尾に追加されます" aria-label="ダミー Model プロンプト"></textarea>
 
@@ -359,9 +369,9 @@
         </div>
     </dialog>
 
+        <script src="pwa.js"></script>
+    <script src="fe4lc.js"></script>
     <script>
-
-        // --- 初期化処理 ---
         appLogic.initializeApp();
     </script>
 </body>
