@@ -186,19 +186,19 @@
 
                 <div class="settings-group">
                    <h3>アドバンスド</h3>
-                   <label class="checkbox-label">
-                       <input type="checkbox" id="enable-dummy-user-toggle">
-                       ダミー User プロンプトを有効にする
-                   </label>
                    <label for="dummy-user">ダミー User プロンプト (送信時のみ追加):</label>
                    <textarea id="dummy-user" placeholder="API送信直前に user ロールとして履歴末尾に追加されます" aria-label="ダミー User プロンプト"></textarea>
+                                       <label class="checkbox-label">
+                     <input type="checkbox" id="enable-dummy-user-toggle">ダミー User プロンプトを有効にする
+                    </label>
 
-                   <label class="checkbox-label">
-                       <input type="checkbox" id="enable-dummy-model-toggle">
-                       ダミー Model プロンプトを有効にする
-                   </label>
-                   <label for="dummy-model">ダミー Model プロンプト (送信時のみ追加):</label>
+                    <div style="margin: 20px 0;"></div>
+
+                    <label for="dummy-model">ダミー Model プロンプト (送信時のみ追加):</label>
                    <textarea id="dummy-model" placeholder="API送信直前に model ロールとして履歴最末尾に追加されます" aria-label="ダミー Model プロンプト"></textarea>
+                   <label class="checkbox-label">
+                    <input type="checkbox" id="enable-dummy-model-toggle">ダミー Model プロンプトを有効にする
+                   </label>
 
                    <label class="checkbox-label">
                        <input type="checkbox" id="concat-dummy-model">
@@ -207,6 +207,8 @@
                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: -5px; margin-bottom: 10px;">
                        ※チェック時、モデル応答の先頭に上記ダミーModelの内容を付与。
                    </p>
+
+                   <div style="margin: 20px 0;"></div>
 
                    <label class="checkbox-label">
                        <input type="checkbox" id="pseudo-streaming">
