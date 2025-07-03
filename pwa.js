@@ -113,6 +113,7 @@ const elements = {
     enableDummyModelToggle: document.getElementById('enable-dummy-model-toggle'), // ダミーModel有効化チェックボックス
     concatDummyModelCheckbox: document.getElementById('concat-dummy-model'), // ダミーモデル連結チェックボックス
     additionalModelsTextarea: document.getElementById('additional-models'), // 追加モデル入力
+    debugVirtualSendToggle: document.getElementById('debug-virtual-send-toggle'), // デバッグ用仮想送信トグル
     pseudoStreamingCheckbox: document.getElementById('pseudo-streaming'),
     enterToSendCheckbox: document.getElementById('enter-to-send'),
     historySortOrderSelect: document.getElementById('history-sort-order'),
@@ -199,6 +200,7 @@ const state = {
         hideSystemPromptInChat: false, // SP非表示設定 (デフォルトfalse)
         enableGrounding: false, //ネット検索設定 (デフォルトfalse)
         enableSwipeNavigation: true,
+        debugVirtualSend: false, // デバッグ用仮想送信設定 (デフォルトfalse)
     },
     backgroundImageUrl: null, // 生成されたオブジェクトURL (DBには保存しない)
     isSending: false,
@@ -426,6 +428,8 @@ const dbUtils = {
                         } else if (key === 'enableGrounding') { // ネット検索設定
                             state.settings[key] = loadedValue === true;
                         } else if (key === 'enableSwipeNavigation') { // スワイプナビゲーション設定
+                            state.settings[key] = loadedValue === true;
+                        } else if (key === 'debugVirtualSend') { // デバッグ用仮想送信設定
                             state.settings[key] = loadedValue === true;
                         } else if (key === 'darkMode' || key === 'streamingOutput' || key === 'pseudoStreaming' || key === 'enterToSend' || key === 'concatDummyModel') {
                                 // その他の真偽値: 厳密にtrueかチェック
@@ -1362,6 +1366,7 @@ const uiUtils = {
         elements.hideSystemPromptToggle.checked = state.settings.hideSystemPromptInChat; // SP非表示設定
         elements.enableGroundingToggle.checked = state.settings.enableGrounding; // ネット検索設定を適用
         elements.swipeNavigationToggle.checked = state.settings.enableSwipeNavigation;
+        elements.debugVirtualSendToggle.checked = state.settings.debugVirtualSend; // デバッグ用仮想送信設定を適用
 
         // ユーザー指定モデルをコンボボックスに追加
         this.updateUserModelOptions();
@@ -1739,6 +1744,35 @@ const uiUtils = {
 const apiUtils = {
     // Gemini APIを呼び出す
     async callGeminiApi(messagesForApi, generationConfig, systemInstruction) {
+        // デバッグ用仮想送信が有効な場合、実際のAPI呼び出しをスキップ
+        if (state.settings.debugVirtualSend) {
+            console.log("デバッグ用仮想送信モード: 実際のAPI呼び出しをスキップし、空の応答を返します");
+            
+            // 空の応答をシミュレートするためのResponseオブジェクトを作成
+            const emptyResponse = new Response(
+                JSON.stringify({
+                    candidates: [{
+                        content: {
+                            parts: [{ text: " " }]
+                        },
+                        finishReason: "STOP"
+                    }],
+                    usageMetadata: {
+                        promptTokenCount: 0,
+                        candidatesTokenCount: 1,
+                        totalTokenCount: 1
+                    }
+                }),
+                {
+                    status: 200,
+                    statusText: "OK",
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+            
+            return emptyResponse;
+        }
+        
         if (!state.settings.apiKey) {
             throw new Error("APIキーが設定されていません。");
         }
@@ -3453,6 +3487,7 @@ const appLogic = {
                 hideSystemPromptInChat: elements.hideSystemPromptToggle.checked, // SP非表示設定
                 enableGrounding: elements.enableGroundingToggle.checked, // ネット検索設定を取得
                 enableSwipeNavigation: elements.swipeNavigationToggle.checked,//スワイプナビゲーション設定を取得
+                debugVirtualSend: elements.debugVirtualSendToggle.checked, // デバッグ用仮想送信設定を取得
             };
 
             // --- 数値入力のバリデーション ---
@@ -3575,6 +3610,7 @@ const appLogic = {
                     fontFamily: '', // フォントもリセット
                     hideSystemPromptInChat: false, // SP非表示もリセット
                     enableSwipeNavigation: true, // スワイプナビゲーションのデフォルト値
+                    debugVirtualSend: false, // デバッグ用仮想送信のデフォルト値
                 };
                 state.backgroundImageUrl = null;
 
@@ -4232,7 +4268,60 @@ const appLogic = {
     buildPromptDataForCheck() {
         // 保存されたリクエスト内容があればそれを表示、なければ未送信メッセージを表示
         if (state.lastSentRequest) {
-            return JSON.stringify(state.lastSentRequest, null, 2);
+            // テキストを短縮表示するためのヘルパー関数
+            const shortenText = (text) => {
+                if (text.length <= 100) {
+                    return text;
+                }
+                const first30 = text.substring(0, 30);
+                const last30 = text.substring(text.length - 30);
+                return `${first30}～${last30}：トータル${text.length}字`;
+            };
+            
+            // リクエストデータをディープコピーして短縮処理
+            const shortenedRequest = JSON.parse(JSON.stringify(state.lastSentRequest));
+            
+            // contentsの各メッセージのpartsを処理
+            if (shortenedRequest.contents) {
+                shortenedRequest.contents.forEach(content => {
+                    if (content.parts) {
+                        content.parts.forEach(part => {
+                            if (part.text) {
+                                part.text = shortenText(part.text);
+                            }
+                            // inlineData（添付ファイル）の場合はdataを置き換え
+                            if (part.inlineData) {
+                                part.inlineData.data = "【添付ファイルデータ】";
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // partsの部分は改行なしにするためのカスタムJSON文字列化
+            const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
+                const indent = ' '.repeat(space * currentDepth);
+                const nextIndent = ' '.repeat(space * (currentDepth + 1));
+                
+                if (Array.isArray(obj)) {
+                    if (obj.length === 0) return '[]';
+                    // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
+                    if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
+                        return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
+                    }
+                    return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
+                }
+                
+                if (obj && typeof obj === 'object') {
+                    const keys = Object.keys(obj);
+                    if (keys.length === 0) return '{}';
+                    return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
+                }
+                
+                return JSON.stringify(obj);
+            };
+            
+            return customStringify(shortenedRequest);
         }
         
         // 保存されたリクエストがない場合

@@ -308,6 +308,16 @@
                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: -5px; margin-bottom: 10px;">
                        ※ 追加後は設定を保存の上、ページをリロード。
                    </p>
+                   
+                   <!-- デバッグ用仮想送信設定 -->
+                   <label class="checkbox-label">
+                       <input type="checkbox" id="debug-virtual-send-toggle">
+                       デバッグ用の仮想送信を有効化（開発用）
+                   </label>
+                   <p style="font-size: 11px; color: var(--text-secondary); margin-top: -5px; margin-bottom: 10px;">
+                       ※ チェック時、実際のAPI呼び出しをスキップし、空の応答を返す。<br>
+                       ※ デバッグ・テスト用。API料金が発生しない。
+                   </p>
                 </div>
 
                 <div class="danger-zone">
