@@ -217,6 +217,7 @@ const state = {
     // ファイルアップロード用状態
     selectedFilesForUpload: [], // { file: File, base64Data?: string, error?: string } ダイアログで選択中のファイル
     pendingAttachments: [], // { name: string, base64Data: string, mimeType: string } 送信時にメッセージに添付されるファイル
+    lastSentRequest: null, // 最後に送信したリクエスト内容（プロンプト確認用）
 };
 
 function updateMessageMaxWidthVar() {
@@ -2116,7 +2117,12 @@ const appLogic = {
         // ナビゲーションボタン
         elements.gotoHistoryBtn.addEventListener('click', () => uiUtils.showScreen('history'));
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
-        elements.promptCheckBtn.addEventListener('click', () => uiUtils.showScreen('prompt-check'));
+        elements.promptCheckBtn.addEventListener('click', () => {
+        // プロンプト確認画面に表示するデータを構築
+        const promptData = this.buildPromptDataForCheck();
+        elements.promptContent.textContent = promptData;
+        uiUtils.showScreen('prompt-check');
+    });
         // 戻るボタンは history.back() を使用
         elements.backToChatFromHistoryBtn.addEventListener('click', () => history.back());
         elements.backToChatFromPromptCheckBtn.addEventListener('click', () => history.back());
@@ -2452,6 +2458,7 @@ const appLogic = {
         state.currentMessages = []; // メッセージクリア
         state.currentSystemPrompt = state.settings.systemPrompt; // デフォルトのシステムプロンプトを適用
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
+        state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
         uiUtils.renderChatMessages(); // 表示クリア
         uiUtils.updateChatTitle(); // タイトルを「新規チャット」に
@@ -2520,6 +2527,7 @@ const appLogic = {
                 // システムプロンプトを読み込み (存在しなければデフォルトを使用)
                 state.currentSystemPrompt = chat.systemPrompt !== undefined ? chat.systemPrompt : state.settings.systemPrompt;
                 state.pendingAttachments = []; // 保留中の添付ファイルをクリア
+                state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
                 uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
                 uiUtils.renderChatMessages(); // メッセージ表示更新 (正規化された isSelected を反映)
                 uiUtils.updateChatTitle(chat.title); // タイトル更新
@@ -2897,6 +2905,43 @@ const appLogic = {
         const systemInstruction = state.currentSystemPrompt?.trim()
             ? { role: "system", parts: [{ text: state.currentSystemPrompt.trim() }] }
             : null;
+
+        // リクエスト内容を保存（プロンプト確認用）
+        const finalGenerationConfig = { ...generationConfig };
+        if (state.settings.presencePenalty !== null) finalGenerationConfig.presencePenalty = state.settings.presencePenalty;
+        if (state.settings.frequencyPenalty !== null) finalGenerationConfig.frequencyPenalty = state.settings.frequencyPenalty;
+        
+        if (state.settings.thinkingBudget !== null || state.settings.includeThoughts) {
+            finalGenerationConfig.thinkingConfig = finalGenerationConfig.thinkingConfig || {};
+            if (state.settings.thinkingBudget !== null && Number.isInteger(state.settings.thinkingBudget) && state.settings.thinkingBudget >= 0) {
+                finalGenerationConfig.thinkingConfig.thinkingBudget = state.settings.thinkingBudget;
+            }
+            if (state.settings.includeThoughts) {
+                finalGenerationConfig.thinkingConfig.includeThoughts = true;
+            }
+            if (Object.keys(finalGenerationConfig.thinkingConfig).length === 0) {
+                delete finalGenerationConfig.thinkingConfig;
+            }
+        }
+
+        const requestBody = {
+            contents: apiMessages,
+            ...(Object.keys(finalGenerationConfig).length > 0 && { generationConfig: finalGenerationConfig }),
+            ...(systemInstruction && systemInstruction.parts && systemInstruction.parts.length > 0 && systemInstruction.parts[0].text && { systemInstruction }),
+            safetySettings: [
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+            ]
+        };
+
+        if (state.settings.enableGrounding) {
+            requestBody.tools = [{ "google_search": {} }];
+        }
+
+        // 送信リクエスト内容を保存
+        state.lastSentRequest = requestBody;
 
         // --- 5. API呼び出しと応答処理 ---
         let modelResponseRawContent = '';
@@ -4181,6 +4226,17 @@ const appLogic = {
             console.log(`ファイル "${removedFile.file.name}" をリストから削除しました。`);
             uiUtils.updateSelectedFilesUI(); // UI更新
         }
+    },
+
+    // プロンプト確認用のデータを構築
+    buildPromptDataForCheck() {
+        // 保存されたリクエスト内容があればそれを表示、なければ未送信メッセージを表示
+        if (state.lastSentRequest) {
+            return JSON.stringify(state.lastSentRequest, null, 2);
+        }
+        
+        // 保存されたリクエストがない場合
+        return "送信された内容はありません";
     },
 
     // 添付を確定する処理
