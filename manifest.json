@@ -1,6 +1,6 @@
 {
-  "name": "GeminiPWA",
-  "short_name": "GeminiPWA",
+  "name": "GeminiPWA (FE4LC)",
+  "short_name": "GeminiPWA-FE4LC",
   "description": "Chat with Gemini and save history.",
   "start_url": "./index.html",
   "display": "standalone",

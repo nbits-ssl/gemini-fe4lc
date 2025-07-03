@@ -74,6 +74,7 @@ const elements = {
     appContainer: document.querySelector('.app-container'),
     chatScreen: document.getElementById('chat-screen'),
     historyScreen: document.getElementById('history-screen'),
+    promptCheckScreen: document.getElementById('prompt-check-screen'),
     settingsScreen: document.getElementById('settings-screen'),
     chatTitle: document.getElementById('chat-title'),
     messageContainer: document.getElementById('message-container'),
@@ -125,12 +126,15 @@ const elements = {
     uploadBackgroundBtn: document.getElementById('upload-background-btn'),
     backgroundThumbnail: document.getElementById('background-thumbnail'),
     deleteBackgroundBtn: document.getElementById('delete-background-btn'),
+    promptContent: document.getElementById('prompt-content'),
     // ボタン
     gotoHistoryBtn: document.getElementById('goto-history-btn'),
     gotoSettingsBtn: document.getElementById('goto-settings-btn'),
     backToChatFromHistoryBtn: document.getElementById('back-to-chat-from-history'),
+    backToChatFromPromptCheckBtn: document.getElementById('back-to-chat-from-prompt-check'),
     backToChatFromSettingsBtn: document.getElementById('back-to-chat-from-settings'),
     newChatBtn: document.getElementById('new-chat-btn'),
+    promptCheckBtn: document.getElementById('prompt-check-btn'),
 
     saveSettingsBtns: document.querySelectorAll('.js-save-settings-btn'),
     updateAppBtn: document.getElementById('update-app-btn'),
@@ -1453,13 +1457,13 @@ const uiUtils = {
             return;
         }
 
-        const allScreens = [elements.chatScreen, elements.historyScreen, elements.settingsScreen];
+        const allScreens = [elements.chatScreen, elements.historyScreen, elements.promptCheckScreen, elements.settingsScreen];
         let activeScreen = null;
 
         // fromPopStateがfalseの場合のみ履歴操作を行う (UI操作時)
         if (!fromPopState) {
-            if (screenName === 'history' || screenName === 'settings') {
-                // 履歴/設定画面への遷移時は履歴を追加
+            if (screenName === 'history' || screenName === 'settings' || screenName === 'prompt-check') {
+                // 履歴/設定/プロンプト確認画面への遷移時は履歴を追加
                 history.pushState({ screen: screenName }, '', `#${screenName}`);
                 console.log(`Pushed state: ${screenName}`);
             } else if (screenName === 'chat') {
@@ -1485,6 +1489,7 @@ const uiUtils = {
             activeScreen = elements.chatScreen;
             elements.chatScreen.style.transform = 'translateX(0)';
             elements.historyScreen.style.transform = 'translateX(-100%)';
+            elements.promptCheckScreen.style.transform = 'translateX(-200%)';
             elements.settingsScreen.style.transform = 'translateX(100%)';
             requestAnimationFrame(() => {
                 this.updateSystemPromptUI();
@@ -1495,12 +1500,20 @@ const uiUtils = {
             activeScreen = elements.historyScreen;
             elements.chatScreen.style.transform = 'translateX(100%)';
             elements.historyScreen.style.transform = 'translateX(0)';
+            elements.promptCheckScreen.style.transform = 'translateX(-100%)';
             elements.settingsScreen.style.transform = 'translateX(200%)';
             this.renderHistoryList();
+        } else if (screenName === 'prompt-check') {
+            activeScreen = elements.promptCheckScreen;
+            elements.chatScreen.style.transform = 'translateX(200%)';
+            elements.historyScreen.style.transform = 'translateX(100%)';
+            elements.promptCheckScreen.style.transform = 'translateX(0)';
+            elements.settingsScreen.style.transform = 'translateX(300%)';
         } else if (screenName === 'settings') {
             activeScreen = elements.settingsScreen;
             elements.chatScreen.style.transform = 'translateX(-100%)';
             elements.historyScreen.style.transform = 'translateX(-200%)';
+            elements.promptCheckScreen.style.transform = 'translateX(-300%)';
             elements.settingsScreen.style.transform = 'translateX(0)';
             this.applySettingsToUI();
         }
@@ -2103,8 +2116,10 @@ const appLogic = {
         // ナビゲーションボタン
         elements.gotoHistoryBtn.addEventListener('click', () => uiUtils.showScreen('history'));
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
+        elements.promptCheckBtn.addEventListener('click', () => uiUtils.showScreen('prompt-check'));
         // 戻るボタンは history.back() を使用
         elements.backToChatFromHistoryBtn.addEventListener('click', () => history.back());
+        elements.backToChatFromPromptCheckBtn.addEventListener('click', () => history.back());
         elements.backToChatFromSettingsBtn.addEventListener('click', () => history.back());
 
         // チャットアクション
