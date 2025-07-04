@@ -18,6 +18,7 @@
                 <button id="goto-history-btn" class="header-button" aria-label="履歴一覧へ">☰</button>
                 <h1 id="chat-title">新規チャット</h1>
                 <button id="new-chat-btn" class="new-chat-button" title="新規チャットを開始">新規</button>
+                <button id="compress-context-btn" class="compress-button" title="コンテキスト圧縮">圧縮</button>
                 <button id="scroll-to-top-btn" class="header-button" aria-label="最上部へ移動" title="最上部へ移動">🔼</button>
                 <button id="scroll-to-bottom-btn" class="header-button" aria-label="最下部へ移動" title="最下部へ移動">🔽</button>
                 <button id="goto-settings-btn" class="header-button" aria-label="設定へ">⚙</button>
@@ -41,9 +42,12 @@
                     <!-- メッセージはここに読み込まれる -->
                 </div>
                 <div id="loading-indicator" class="loading-indicator hidden" aria-live="polite">応答中</div>
+                <!-- トークン表示をメッセージコンテナの下に配置 -->
+                <div id="token-display" class="token-display"></div>
             </main>
             <footer class="chat-input-area">
                 <button id="prompt-check-btn" class="prompt-check-button" title="プロンプト確認" aria-label="プロンプト確認">🔍</button>
+                <button id="compression-mode-toggle" class="prompt-check-button" title="圧縮モード切替" aria-label="圧縮モード切替">📝</button>
                 <textarea id="user-input" placeholder="メッセージを入力..." rows="1" aria-label="メッセージ入力"></textarea>
                 <!-- 添付ファイルボタンを追加 -->
                 <button id="attach-file-btn" title="ファイルを添付">+<span class="attachment-badge"></span></button>
@@ -232,6 +236,29 @@
                        ※実際には一括生成を呼び、応答はストリーミング再生を行う。<br>
                        普通のストリーミングより生成待ち時間は長くなる。
                    </p>
+                </div>
+
+                <div class="settings-group">
+                    <h3>コンテキスト圧縮</h3>
+                    <label for="compression-prompt">圧縮の際のプロンプト:</label>
+                    <textarea id="compression-prompt" aria-label="圧縮の際のプロンプト"></textarea>
+
+                    <div class="param-grid">
+                        <div>
+                            <label for="keep-first-messages">圧縮しないメッセージ数 (最初から):</label>
+                            <input type="number" id="keep-first-messages" step="1" min="0" placeholder="20" aria-label="圧縮しないメッセージ数 (最初から)">
+                        </div>
+                        <div>
+                            <label for="keep-last-messages">圧縮しないメッセージ数 (最後から):</label>
+                            <input type="number" id="keep-last-messages" step="1" min="0" placeholder="20" aria-label="圧縮しないメッセージ数 (最後から)">
+                        </div>
+                    </div>
+                    
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
+                        ※ 長い会話でトークン数が多くなった際に、中間部分を要約して圧縮します。<br>
+                        ※ 基本設定と同じモデルを使用して要約を行います。<br>
+                        ※ 最初と最後の指定した数のメッセージは保持され、中間部分のみ要約されます。
+                    </p>
                 </div>
                 <div class="settings-group">
                     <h3>検索</h3>

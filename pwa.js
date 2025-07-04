@@ -12,6 +12,9 @@ const DEFAULT_MAX_TOKENS = 4000;
 const DEFAULT_TOP_K = 40;
 const DEFAULT_TOP_P = 0.95;
 const DEFAULT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'; // デフォルトフォント
+const DEFAULT_COMPRESSION_PROMPT = 'これまでのやり取りで起こった事実関係とその時の登場人物の振る舞いを詳細にまとめて。要約データとして扱うので、既存のフォーマットは無視。Markdownにもせずに、小説の「あらすじ」として通用するような形で。';
+const DEFAULT_KEEP_FIRST_MESSAGES = 20;
+const DEFAULT_KEEP_LAST_MESSAGES = 20;
 const CHAT_TITLE_LENGTH = 15;
 const TEXTAREA_MAX_HEIGHT = 120;
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
@@ -121,6 +124,10 @@ const elements = {
     fontFamilyInput: document.getElementById('font-family-input'), // フォント指定入力
     hideSystemPromptToggle: document.getElementById('hide-system-prompt-toggle'), // SP非表示トグル
     enableGroundingToggle: document.getElementById('enable-grounding-toggle'), // ネット検索トグル
+    // コンテキスト圧縮設定要素
+    compressionPromptTextarea: document.getElementById('compression-prompt'),
+    keepFirstMessagesInput: document.getElementById('keep-first-messages'),
+    keepLastMessagesInput: document.getElementById('keep-last-messages'),
     appVersionSpan: document.getElementById('app-version'),
     // 背景画像設定要素
     backgroundImageInput: document.getElementById('background-image-input'),
@@ -136,6 +143,8 @@ const elements = {
     backToChatFromSettingsBtn: document.getElementById('back-to-chat-from-settings'),
     newChatBtn: document.getElementById('new-chat-btn'),
     promptCheckBtn: document.getElementById('prompt-check-btn'),
+    compressContextBtn: document.getElementById('compress-context-btn'),
+    compressionModeToggle: document.getElementById('compression-mode-toggle'),
 
     saveSettingsBtns: document.querySelectorAll('.js-save-settings-btn'),
     updateAppBtn: document.getElementById('update-app-btn'),
@@ -201,6 +210,10 @@ const state = {
         enableGrounding: false, //ネット検索設定 (デフォルトfalse)
         enableSwipeNavigation: true,
         debugVirtualSend: false, // デバッグ用仮想送信設定 (デフォルトfalse)
+        // コンテキスト圧縮設定
+        compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
+        keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
+        keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
     },
     backgroundImageUrl: null, // 生成されたオブジェクトURL (DBには保存しない)
     isSending: false,
@@ -220,6 +233,9 @@ const state = {
     selectedFilesForUpload: [], // { file: File, base64Data?: string, error?: string } ダイアログで選択中のファイル
     pendingAttachments: [], // { name: string, base64Data: string, mimeType: string } 送信時にメッセージに添付されるファイル
     lastSentRequest: null, // 最後に送信したリクエスト内容（プロンプト確認用）
+    // コンテキスト圧縮用状態
+    isCompressionMode: true, // 圧縮モードの状態
+    compressedSummary: null, // 1セッション1圧縮のデータ { messageIds: [], summary: string, timestamp: number }
 };
 
 function updateMessageMaxWidthVar() {
@@ -243,6 +259,15 @@ window.addEventListener('resize', () => {
 
 // --- ユーティリティ関数 ---
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// メッセージフィルタリング関数（圧縮機能とAPI送信で共通使用）
+function filterMessagesForApi(messages) {
+    return messages.filter(msg => {
+        if (msg.role === 'user') return true;
+        if (msg.role === 'model') return !msg.isCascaded || (msg.isCascaded && msg.isSelected);
+        return false;
+    });
+}
 
 // ファイルサイズを読みやすい形式にフォーマット
 function formatFileSize(bytes) {
@@ -431,6 +456,8 @@ const dbUtils = {
                             state.settings[key] = loadedValue === true;
                         } else if (key === 'debugVirtualSend') { // デバッグ用仮想送信設定
                             state.settings[key] = loadedValue === true;
+                        } else if (key === 'compressionMode') { // 圧縮モード設定
+                            state.settings[key] = loadedValue === true;
                         } else if (key === 'darkMode' || key === 'streamingOutput' || key === 'pseudoStreaming' || key === 'enterToSend' || key === 'concatDummyModel') {
                                 // その他の真偽値: 厳密にtrueかチェック
                                 state.settings[key] = loadedValue === true;
@@ -548,6 +575,8 @@ const dbUtils = {
                     updatedAt: now,
                     createdAt: existingChatData ? existingChatData.createdAt : now, // 新規なら現在時刻
                     title: title,
+                    // 圧縮データを保存
+                    ...(state.compressedSummary && { compressedSummary: state.compressedSummary }),
                 };
                 if (chatIdForOperation) { // IDがあれば更新なのでIDを付与
                     chatData.id = chatIdForOperation;
@@ -770,6 +799,11 @@ const uiUtils = {
             }
         }
         //this.scrollToBottom(); // 最下部へスクロールは削除、呼び出し元の責任で行う
+        
+        // トークン表示を更新
+        if (typeof tokenUtils !== 'undefined') {
+            tokenUtils.updateTokenDisplay();
+        }
     },
 
     // メッセージをコンテナに追加
@@ -1092,6 +1126,11 @@ const uiUtils = {
             messageDiv.id = `streaming-message-${index}`;
         }
         elements.messageContainer.appendChild(messageDiv);
+        
+        // トークン表示を更新
+        if (typeof tokenUtils !== 'undefined') {
+            tokenUtils.updateTokenDisplay();
+        }
     },
 
     // ストリーミング中のメッセージを更新
@@ -1177,6 +1216,11 @@ const uiUtils = {
             }
         }
         this.scrollToBottom(); // 最後にスクロール
+        
+        // トークン表示を更新
+        if (typeof tokenUtils !== 'undefined') {
+            tokenUtils.updateTokenDisplay();
+        }
     },
 
     // エラーメッセージを表示
@@ -1369,6 +1413,10 @@ const uiUtils = {
         elements.enableGroundingToggle.checked = state.settings.enableGrounding; // ネット検索設定を適用
         elements.swipeNavigationToggle.checked = state.settings.enableSwipeNavigation;
         elements.debugVirtualSendToggle.checked = state.settings.debugVirtualSend; // デバッグ用仮想送信設定を適用
+        // コンテキスト圧縮設定を適用
+        elements.compressionPromptTextarea.value = state.settings.compressionPrompt || DEFAULT_COMPRESSION_PROMPT;
+        elements.keepFirstMessagesInput.value = state.settings.keepFirstMessages ?? DEFAULT_KEEP_FIRST_MESSAGES;
+        elements.keepLastMessagesInput.value = state.settings.keepLastMessages ?? DEFAULT_KEEP_LAST_MESSAGES;
 
         // ユーザー指定モデルをコンボボックスに追加
         this.updateUserModelOptions();
@@ -2116,6 +2164,11 @@ const appLogic = {
             // 読み込んだ全設定をUIフィールドに適用
             uiUtils.applySettingsToUI();
 
+            // 圧縮モードの状態を設定から読み込んでUIに反映
+            state.isCompressionMode = state.settings.compressionMode !== undefined ? state.settings.compressionMode : true;
+            elements.compressionModeToggle.textContent = state.isCompressionMode ? '📄' : '📝';
+            elements.compressionModeToggle.title = state.isCompressionMode ? '圧縮モード: ON' : '圧縮モード: OFF';
+
             // 最新のチャットを読み込むか、新規チャットを開始
             const chats = await dbUtils.getAllChats(state.settings.historySortOrder);
             if (chats && chats.length > 0) {
@@ -2154,11 +2207,26 @@ const appLogic = {
         elements.gotoHistoryBtn.addEventListener('click', () => uiUtils.showScreen('history'));
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
         elements.promptCheckBtn.addEventListener('click', () => {
-        // プロンプト確認画面に表示するデータを構築
-        const promptData = this.buildPromptDataForCheck();
-        elements.promptContent.textContent = promptData;
-        uiUtils.showScreen('prompt-check');
-    });
+			// プロンプト確認画面に表示するデータを構築
+			const promptData = this.buildPromptDataForCheck();
+			elements.promptContent.textContent = promptData;
+			uiUtils.showScreen('prompt-check');
+		});
+        
+        elements.compressionModeToggle.addEventListener('click', () => {
+            state.isCompressionMode = !state.isCompressionMode;
+            // ボタンの見た目を更新
+            elements.compressionModeToggle.textContent = state.isCompressionMode ? '📄' : '📝';
+            elements.compressionModeToggle.title = state.isCompressionMode ? '圧縮モード: ON' : '圧縮モード: OFF';
+            console.log(`圧縮モード: ${state.isCompressionMode ? 'ON' : 'OFF'}`);
+            
+            // 設定を保存
+            state.settings.compressionMode = state.isCompressionMode;
+            dbUtils.saveSetting('compressionMode', state.isCompressionMode).catch(error => {
+                console.error('圧縮モード設定の保存に失敗:', error);
+            });
+        });
+        
         // 戻るボタンは history.back() を使用
         elements.backToChatFromHistoryBtn.addEventListener('click', () => history.back());
         elements.backToChatFromPromptCheckBtn.addEventListener('click', () => history.back());
@@ -2493,8 +2561,13 @@ const appLogic = {
         state.currentChatId = null; // IDリセット
         state.currentMessages = []; // メッセージクリア
         state.currentSystemPrompt = state.settings.systemPrompt; // デフォルトのシステムプロンプトを適用
+        state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
+        // 圧縮モードを設定から読み込んだ状態にリセット
+        state.isCompressionMode = state.settings.compressionMode !== undefined ? state.settings.compressionMode : true;
+        elements.compressionModeToggle.textContent = state.isCompressionMode ? '📄' : '📝';
+        elements.compressionModeToggle.title = state.isCompressionMode ? '圧縮モード: ON' : '圧縮モード: OFF';
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
         uiUtils.renderChatMessages(); // 表示クリア
         uiUtils.updateChatTitle(); // タイトルを「新規チャット」に
@@ -2562,6 +2635,8 @@ const appLogic = {
 
                 // システムプロンプトを読み込み (存在しなければデフォルトを使用)
                 state.currentSystemPrompt = chat.systemPrompt !== undefined ? chat.systemPrompt : state.settings.systemPrompt;
+                // 圧縮データを読み込み
+                state.compressedSummary = chat.compressedSummary || null;
                 state.pendingAttachments = []; // 保留中の添付ファイルをクリア
                 state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
                 uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
@@ -2652,7 +2727,9 @@ const appLogic = {
                     systemPrompt: chat.systemPrompt || '', // システムプロンプトもコピー
                     updatedAt: Date.now(), // 更新/作成日時は現在
                     createdAt: Date.now(),
-                    title: newTitle
+                    title: newTitle,
+                    // 圧縮データもコピー
+                    ...(chat.compressedSummary && { compressedSummary: chat.compressedSummary })
                 };
                 // 新しいチャットとしてDBに追加
                 const newChatId = await new Promise((resolve, reject) => {
@@ -2903,12 +2980,8 @@ const appLogic = {
             ? state.currentMessages.slice(0, userMessageIndex + 1)
             : [...state.currentMessages];
 
-        const apiMessages = messagesToProcess
-            .filter(msg => {
-                if (msg.role === 'user') return true;
-                if (msg.role === 'model') return !msg.isCascaded || (msg.isCascaded && msg.isSelected);
-                return false;
-            })
+        // 基本メッセージ配列を構築
+        let baseMessages = filterMessagesForApi(messagesToProcess)
             .map(msg => {
                 const parts = [];
                 if (msg.content && msg.content.trim() !== '') {
@@ -2926,6 +2999,17 @@ const appLogic = {
                 }
                 return { role: msg.role, parts: parts };
             });
+
+        // 圧縮機能を使用してメッセージ配列を構築
+        console.log('=== 圧縮機能デバッグ ===');
+        console.log('state.isCompressionMode:', state.isCompressionMode);
+        console.log('state.compressedSummary:', state.compressedSummary);
+        console.log('baseMessages:', baseMessages);
+        
+        const apiMessages = compressionUtils.buildMessagesForApi(baseMessages, state.isCompressionMode);
+        
+        console.log('最終的なapiMessages:', apiMessages);
+        console.log('=== 圧縮機能デバッグ終了 ===');
 
         const dummyUserText = state.settings.enableDummyUser && state.settings.dummyUser?.trim();
         const dummyModelText = state.settings.enableDummyModel && state.settings.dummyModel?.trim();
@@ -3490,6 +3574,11 @@ const appLogic = {
                 enableGrounding: elements.enableGroundingToggle.checked, // ネット検索設定を取得
                 enableSwipeNavigation: elements.swipeNavigationToggle.checked,//スワイプナビゲーション設定を取得
                 debugVirtualSend: elements.debugVirtualSendToggle.checked, // デバッグ用仮想送信設定を取得
+                // コンテキスト圧縮設定を取得
+                compressionMode: state.isCompressionMode,
+                compressionPrompt: elements.compressionPromptTextarea.value.trim(),
+                keepFirstMessages: elements.keepFirstMessagesInput.value === '' ? DEFAULT_KEEP_FIRST_MESSAGES : parseInt(elements.keepFirstMessagesInput.value),
+                keepLastMessages: elements.keepLastMessagesInput.value === '' ? DEFAULT_KEEP_LAST_MESSAGES : parseInt(elements.keepLastMessagesInput.value),
             };
 
             // --- 数値入力のバリデーション ---
@@ -3516,6 +3605,13 @@ const appLogic = {
             }
             if (newSettings.thinkingBudget !== null && (isNaN(newSettings.thinkingBudget) || newSettings.thinkingBudget < 0 || !Number.isInteger(newSettings.thinkingBudget))) {
                 newSettings.thinkingBudget = null; // 不正値はnull
+            }
+            // コンテキスト圧縮設定のバリデーション
+            if (isNaN(newSettings.keepFirstMessages) || newSettings.keepFirstMessages < 0) {
+                newSettings.keepFirstMessages = DEFAULT_KEEP_FIRST_MESSAGES;
+            }
+            if (isNaN(newSettings.keepLastMessages) || newSettings.keepLastMessages < 0) {
+                newSettings.keepLastMessages = DEFAULT_KEEP_LAST_MESSAGES;
             }
             // --- バリデーション終了 ---
 
@@ -3613,6 +3709,11 @@ const appLogic = {
                     hideSystemPromptInChat: false, // SP非表示もリセット
                     enableSwipeNavigation: true, // スワイプナビゲーションのデフォルト値
                     debugVirtualSend: false, // デバッグ用仮想送信のデフォルト値
+                    // コンテキスト圧縮設定のデフォルト値
+                    compressionMode: true,
+                    compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
+                    keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
+                    keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
                 };
                 state.backgroundImageUrl = null;
 

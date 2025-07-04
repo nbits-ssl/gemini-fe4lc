@@ -351,6 +351,28 @@ body.dark-mode .new-chat-button:hover {
     background-color: var(--bg-button-save-hover);
 }
 
+/* 圧縮ボタン */
+.compress-button {
+    font-size: 14px;
+    padding: 5px 10px;
+    background-color: #ff9500; /* オレンジ色 */
+    color: var(--text-light);
+    flex-shrink: 0;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.compress-button:hover {
+    background-color: #e6850e; /* オレンジ色のホバー */
+}
+body.dark-mode .compress-button {
+    background-color: #ff9500; /* ダークモードでも同じオレンジ色 */
+}
+body.dark-mode .compress-button:hover {
+    background-color: #e6850e; /* ダークモードでも同じホバー色 */
+}
+
 /* --- メインコンテンツエリア --- */
 .main-content {
     flex-grow: 1;
@@ -829,6 +851,22 @@ body.dark-mode #loading-indicator {
     background-color: var(--bg-input); /* ダークモードでは入力欄に近い背景色 */
     color: var(--text-secondary);
     box-shadow: 0 2px 6px var(--shadow-secondary);
+}
+
+/* トークン表示 */
+.token-display {
+    text-align: right;
+    padding: 4px;
+	margin: 0;
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    display: none;
+    transition: opacity 0.3s ease;
+}
+
+body.dark-mode .token-display {
+    color: var(--text-secondary);
 }
 
 /* --- 履歴画面 --- */
@@ -1714,7 +1752,7 @@ body.dark-mode .prompt-content {
     font-size: 16px;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    margin-right: 8px;
+    margin-right: 0; /* 余白を削除 */
     min-width: 40px;
     height: 40px;
     display: flex;
