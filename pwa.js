@@ -1075,8 +1075,10 @@ const uiUtils = {
                 }
                 const formattedCandidates = usage.candidatesTokenCount.toLocaleString('en-US');
                 const formattedTotal = finalTotalTokenCount.toLocaleString('en-US');
-                tokenSpan.textContent = `${formattedCandidates}T / ${formattedTotal}T`;
-                tokenSpan.title = `Candidate Tokens / Total Tokens`; // ホバー時のツールチップ
+                // メッセージ番号を計算（1から始まる番号）
+                const messageNumber = index + 1;
+                tokenSpan.textContent = `#${messageNumber} | ${formattedCandidates}T / ${formattedTotal}T`;
+                tokenSpan.title = `Message #${messageNumber} | Candidate Tokens / Total Tokens`; // ホバー時のツールチップ
 
                 // アクションボタン群の前 (左端) に追加
                 actionsDiv.appendChild(tokenSpan);
