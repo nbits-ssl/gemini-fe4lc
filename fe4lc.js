@@ -72,9 +72,8 @@ const tokenUtils = {
 
         const totalTokens = this.calculateTotalTokens(state.currentMessages);
         const formattedTokens = this.formatTotalTokens(totalTokens);
-        
         tokenDisplay.textContent = formattedTokens;
-        tokenDisplay.style.display = formattedTokens ? 'block' : 'none';
+        tokenDisplay.style.display = 'block'; // 常に表示
     }
 };
 
@@ -413,9 +412,9 @@ function buildPromptDataForCheck() {
                             part.inlineData.data = "【添付ファイルデータ】";
                         }
                     });
-                }
-            });
-        }
+            }
+        });
+    }
         
         // partsの部分は改行なしにするためのカスタムJSON文字列化
         const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {

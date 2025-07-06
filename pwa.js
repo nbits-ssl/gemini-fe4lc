@@ -2227,11 +2227,11 @@ const appLogic = {
         elements.gotoHistoryBtn.addEventListener('click', () => uiUtils.showScreen('history'));
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
         elements.promptCheckBtn.addEventListener('click', () => {
-			// プロンプト確認画面に表示するデータを構築
+        // プロンプト確認画面に表示するデータを構築
 			const promptData = buildPromptDataForCheck();
-			elements.promptContent.textContent = promptData;
-			uiUtils.showScreen('prompt-check');
-		});
+        elements.promptContent.textContent = promptData;
+        uiUtils.showScreen('prompt-check');
+    });
         
         elements.compressionModeToggle.addEventListener('click', () => {
             state.isCompressionMode = !state.isCompressionMode;

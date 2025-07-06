@@ -30,7 +30,7 @@
     --bg-button-cancel-hover: #d32f2f;
     --bg-button-update: #1976d2;
     --bg-button-update-hover: #115293;
-    --bg-header: #4a90e2;
+    --bg-header: #205080;
     --bg-message-actions: rgba(255, 255, 255, 0.8);
     --bg-overlay-light: rgba(255, 255, 255, 0.65); /* ライトモード用オーバーレイ */
     /* カスケードコントロール用 */
@@ -117,7 +117,7 @@ body.dark-mode {
     --bg-button-cancel-hover: #d1332b;
     --bg-button-update: #0a84ff;
     --bg-button-update-hover: #0069d1;
-    --bg-header: #007aff;
+    --bg-header: #003366;
     --bg-message-actions: rgba(50, 50, 50, 0.8);
     --bg-overlay-dark: rgba(30, 30, 30, 0.55); /* ダークモード用オーバーレイ */
     /* カスケードコントロール用 (ダーク) */
@@ -714,7 +714,7 @@ body.dark-mode #chat-screen::before {
 .message-edit-area textarea {
     min-height: 60px;
     margin-bottom: 5px;
-    width: 100%; /* 幅を親要素に合わせる */
+    width: 100%;
 }
 .message-edit-actions {
     display: flex;
@@ -820,30 +820,34 @@ body.dark-mode .chat-input-area button#send-button.sending:hover {
 
 /* ローディングインジケーター */
 #loading-indicator {
-    position: fixed; /* 画面に固定 */
-    bottom: 65px;    /* 入力エリアの上あたり (入力エリア高さ約40px + パディング10px*2 + 余白5px) */
-    right: 20px;     /* 右端からの距離 */
-    background-color: var(--bg-tertiary); /* 背景色 */
-    color: var(--text-secondary);      /* テキスト色 */
-    padding: 6px 12px; /* パディング調整 */
-    border-radius: 15px; /* より丸みのある角 */
-    font-size: 11px; /* フォントサイズ調整 */
-    font-style: normal; /* イタリック解除 */
-    font-weight: 500;
-    z-index: 3;      /* 入力エリア(z-index: 2)より手前 */
-    box-shadow: 0 2px 5px var(--shadow-primary); /* 少し目立つ影 */
-    /* フェードイン/アウトのためのトランジション */
+    position: fixed;
+    bottom: 75px;
+    right: 25px;
+    z-index: 3;
+    background: none;
+    color: inherit;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: inherit;
+    font-style: normal;
+    font-weight: normal;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    pointer-events: none;
     transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
-    opacity: 0; /* 初期状態は非表示 (透明) */
-    visibility: hidden; /* 初期状態は非表示 (レイアウトに影響しない) */
-    transform: translateY(10px); /* 少し下から登場するアニメーション */
-    pointer-events: none; /* クリックを透過 */
 }
-/* hiddenクラスがついていない場合に表示 */
 #loading-indicator:not(.hidden) {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0); /* 元の位置に戻る */
+    transform: translateY(0);
+}
+body.dark-mode #loading-indicator {
+    background: none;
+    color: inherit;
+    box-shadow: none;
 }
 
 /* ダークモード固有のスタイル（必要に応じて微調整） */
@@ -1121,7 +1125,7 @@ body.dark-mode .token-display {
         --bg-button-cancel-hover: #d1332b;
         --bg-button-update: #0a84ff;
         --bg-button-update-hover: #0069d1;
-        --bg-header: #007aff;
+        --bg-header: #003366;
         --bg-message-actions: rgba(50, 50, 50, 0.8);
         /* --bg-overlay-dark は body.dark-mode で定義済み */
         /* カスケードコントロール用 (ダーク) */
@@ -1767,4 +1771,18 @@ body.dark-mode .prompt-content {
 .prompt-check-button:disabled {
     background-color: var(--bg-button-disabled);
     cursor: not-allowed;
+}
+
+/* 応答中スピナー画像アニメーション */
+.responding-spinner {
+  display: block;
+  margin: 0 auto;
+  animation: spin-gemini 2.5s linear infinite;
+}
+@keyframes spin-gemini {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+body.dark-mode .responding-spinner {
+  filter: drop-shadow(0 0 6px #00aaff);
 }
