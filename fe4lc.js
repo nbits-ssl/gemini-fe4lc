@@ -1,5 +1,8 @@
 // fe4lc.js - 追加機能用JavaScriptファイル
 
+// 定数定義
+const COMPRESSED_SUMMARY_PREFIX = '[summary]';
+
 // トークン計算機能
 const tokenUtils = {
     // セッション全体のトータルトークンを計算
@@ -22,10 +25,44 @@ const tokenUtils = {
         return 0;
     },
 
+    // 圧縮前の本来のトータルトークンを計算
+    calculateOriginalTokens(messages) {
+        if (!state.compressedSummary || !messages || messages.length === 0) {
+            return this.calculateTotalTokens(messages);
+        }
+
+        // 保存された圧縮前トークン数を使用
+        if (typeof state.compressedSummary.originalTokens === 'number') {
+            // 現在のトークン数 - 圧縮後のトークン数 + 圧縮前のトークン数
+            const currentTokens = this.calculateTotalTokens(messages);
+            const compressedTokens = state.compressedSummary.compressedTokens || 0;
+            return currentTokens - compressedTokens + state.compressedSummary.originalTokens;
+        }
+
+        return 0;
+    },
+
     // トークン数をフォーマットして表示用文字列を生成
     formatTotalTokens(totalTokens) {
         if (totalTokens === 0) return '';
-        return `Total ${totalTokens.toLocaleString('en-US')} Tokens`;
+        
+        // 圧縮状態を判定
+        let compressionStatus = '[not compressed]';
+        if (state.compressedSummary) {
+            const startIndex = state.compressedSummary.startIndex;
+            const endIndex = state.compressedSummary.endIndex;
+            const msgCount = endIndex - startIndex + 1;
+            compressionStatus = `[compressed ~${msgCount} msgs]`;
+        }
+        
+        if (state.compressedSummary) {
+            // 圧縮後の場合、本来のトークン数も計算
+            const originalTokens = this.calculateOriginalTokens(state.currentMessages);
+            const originalK = Math.round(originalTokens / 1000);
+            return `${compressionStatus} Total ${totalTokens.toLocaleString('en-US')} Tokens (Original: ~${originalK}k)`;
+        } else {
+            return `${compressionStatus} Total ${totalTokens.toLocaleString('en-US')} Tokens`;
+        }
     },
 
     // トークン表示を更新
@@ -49,6 +86,27 @@ const scrollElements = {
 
 // 圧縮機能
 const compressionUtils = {
+    // テキストのトークン数を取得
+    async countTokens(text) {
+        try {
+            const response = await apiUtils.callGeminiApi([
+                {
+                    role: 'user',
+                    parts: [{ text: text }]
+                }
+            ], { temperature: 0.1 }, null);
+            
+            if (response) {
+                const data = await response.json();
+                return data.usageMetadata?.promptTokenCount || 0;
+            }
+        } catch (error) {
+            console.error('トークン数取得に失敗:', error);
+        }
+        // エラーの場合は概算（文字数÷4）
+        return Math.ceil(text.length / 4);
+    },
+
     // 設定に従ってメッセージを抽出
     extractMessagesForCompression(messages, keepFirst, keepLast) {
         // pwa.jsの共通フィルタリング関数を使用
@@ -121,7 +179,7 @@ const compressionUtils = {
                     console.log(`圧縮サマリを挿入: index ${index}`);
                     result.push({
                         role: 'user',
-                        parts: [{ text: `[summary] ${state.compressedSummary.summary}` }]
+                        parts: [{ text: `${COMPRESSED_SUMMARY_PREFIX} ${state.compressedSummary.summary}` }]
                     });
                     summaryInserted = true;
                 } else {
@@ -202,6 +260,11 @@ const compressionUtils = {
             
             if (response) {
                 const data = await response.json();
+                console.log('=== 圧縮API応答デバッグ ===');
+                console.log('data:', data);
+                console.log('data.candidates:', data.candidates);
+                console.log('data.candidates?.[0]:', data.candidates?.[0]);
+                
                 const candidate = data.candidates?.[0];
                 
                 if (candidate && candidate.content?.parts) {
@@ -222,10 +285,46 @@ const compressionUtils = {
                         compressedStartIndex = keepFirst;
                         compressedEndIndex = keepFirst + middleMessages.length - 1;
                     }
+
+                    // 圧縮前のチャット全体のトークン数を取得
+                    const totalTokensBeforeCompression = tokenUtils.calculateTotalTokens(state.currentMessages);
+                    
+                    // 圧縮プロンプトのトークン数を計算（promptTokenCountから圧縮対象メッセージのトークン数を推定）
+                    const promptTokenCount = data.usageMetadata?.promptTokenCount || 0;
+                    
+                    // 圧縮後のトークン数を取得（API応答のusageMetadataから）
+                    let compressedTokens = 0;
+                    if (data.usageMetadata && typeof data.usageMetadata.candidatesTokenCount === 'number') {
+                        compressedTokens = data.usageMetadata.candidatesTokenCount;
+                    } else {
+                        // usageMetadataがない場合は概算
+                        compressedTokens = Math.ceil(compressedContent.length / 4);
+                    }
+
+                    // 圧縮指示文のトークン数を取得
+                    const compressionPromptTokens = await this.countTokens(compressionPrompt);
+
+                    // 圧縮対象メッセージの実際のトークン数を計算
+                    const originalTokens = promptTokenCount - compressionPromptTokens;
+
+                    // デバッグ用ログ
+                    console.log('=== トークン数計算デバッグ ===');
+                    console.log('data.usageMetadata:', data.usageMetadata);
+                    console.log('totalTokensBeforeCompression:', totalTokensBeforeCompression);
+                    console.log('promptTokenCount:', promptTokenCount);
+                    console.log('compressionPromptTokens:', compressionPromptTokens);
+                    console.log('originalTokens (calculated):', originalTokens);
+                    console.log('compressedTokens:', compressedTokens);
+
                     state.compressedSummary = {
                         startIndex: compressedStartIndex,
                         endIndex: compressedEndIndex,
                         summary: compressedContent,
+                        totalTokensBeforeCompression: totalTokensBeforeCompression,
+                        promptTokenCount: promptTokenCount,
+                        compressionPromptTokens: compressionPromptTokens,
+                        originalTokens: originalTokens,
+                        compressedTokens: compressedTokens,
                         timestamp: Date.now()
                     };
 
@@ -237,6 +336,8 @@ const compressionUtils = {
                     try {
                         await dbUtils.saveChat();
                         console.log('圧縮データをIndexedDBに保存しました');
+                        // 圧縮ボタンのテキストを更新
+                        updateCompressButtonText();
                     } catch (error) {
                         console.error('圧縮データの保存に失敗しました:', error);
                     }
@@ -254,24 +355,97 @@ const compressionUtils = {
 const scrollUtils = {
     // チャットコンテナの最上部へスクロール
     scrollToTop() {
-        requestAnimationFrame(() => { // 次の描画タイミングで実行
-            const mainContent = document.querySelector('#chat-screen .main-content');
-            if (mainContent) {
-                mainContent.scrollTop = 0;
-            }
-        });
+        uiUtils.scrollToTop();
     },
 
     // チャットコンテナの最下部へスクロール
     scrollToBottom() {
-        requestAnimationFrame(() => { // 次の描画タイミングで実行
-            const mainContent = document.querySelector('#chat-screen .main-content');
-            if (mainContent) {
-                mainContent.scrollTop = mainContent.scrollHeight;
-            }
-        });
+        uiUtils.scrollToBottom();
     }
 };
+
+// 圧縮ボタンのテキストを更新
+function updateCompressButtonText() {
+    const compressButton = document.getElementById('compress-context-btn');
+    if (compressButton) {
+        if (state.compressedSummary) {
+            compressButton.textContent = '再圧縮';
+            compressButton.title = '既存の圧縮データを上書きして再圧縮します';
+        } else {
+            compressButton.textContent = '圧縮';
+            compressButton.title = '会話の中間部分を要約して圧縮します';
+        }
+    }
+}
+
+// プロンプト確認用のデータを構築
+function buildPromptDataForCheck() {
+    // 保存されたリクエスト内容があればそれを表示、なければ未送信メッセージを表示
+    if (state.lastSentRequest) {
+        // テキストを短縮表示するためのヘルパー関数
+        const shortenText = (text) => {
+            if (text.length <= 100) {
+                return text;
+            }
+            const first30 = text.substring(0, 30);
+            const last30 = text.substring(text.length - 30);
+            return `${first30}${OMISSION_TEXT}${last30}：トータル${text.length}字`;
+        };
+        
+        // リクエストデータをディープコピーして短縮処理
+        const shortenedRequest = JSON.parse(JSON.stringify(state.lastSentRequest));
+        
+        // contentsの各メッセージのpartsを処理
+        if (shortenedRequest.contents) {
+            shortenedRequest.contents.forEach(content => {
+                if (content.parts) {
+                    content.parts.forEach(part => {
+                        if (part.text) {
+                            // 圧縮データ（COMPRESSED_SUMMARY_PREFIXで始まるテキスト）は短縮しない
+                            if (part.text.startsWith(COMPRESSED_SUMMARY_PREFIX)) {
+                                // 圧縮データはそのまま表示
+                            } else {
+                                part.text = shortenText(part.text);
+                            }
+                        }
+                        // inlineData（添付ファイル）の場合はdataを置き換え
+                        if (part.inlineData) {
+                            part.inlineData.data = "【添付ファイルデータ】";
+                        }
+                    });
+                }
+            });
+        }
+        
+        // partsの部分は改行なしにするためのカスタムJSON文字列化
+        const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
+            const indent = ' '.repeat(space * currentDepth);
+            const nextIndent = ' '.repeat(space * (currentDepth + 1));
+            
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) return '[]';
+                // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
+                if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
+                    return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
+                }
+                return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
+            }
+            
+            if (obj && typeof obj === 'object') {
+                const keys = Object.keys(obj);
+                if (keys.length === 0) return '{}';
+                return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
+            }
+            
+            return JSON.stringify(obj);
+        };
+        
+        return customStringify(shortenedRequest);
+    }
+    
+    // 保存されたリクエストがない場合
+    return "送信された内容はありません";
+}
 
 
 

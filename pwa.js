@@ -23,8 +23,10 @@ const IMPORT_PREFIX = '(取込) ';
 const LIGHT_THEME_COLOR = '#4a90e2';
 const DARK_THEME_COLOR = '#007aff';
 const APP_VERSION = "0.26"; // Thought summaries対応、streamingのバグ修正
+const FE4LC_APP_VERSION = "202507a"; 
 const SWIPE_THRESHOLD = 50; // スワイプ判定の閾値 (px)
 const ZOOM_THRESHOLD = 1.01; // ズーム状態と判定するスケールの閾値 (誤差考慮)
+const OMISSION_TEXT = '...[省略]...'; // 省略表示用テキスト
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 最大ファイルサイズ (例: 10MB)
 const MAX_TOTAL_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 1メッセージあたりの合計添付ファイルサイズ上限 (例: 50MB) - API制限も考慮
 
@@ -302,7 +304,6 @@ function registerServiceWorker() {
                     // Service Workerからのメッセージ受信
                     navigator.serviceWorker.addEventListener('message', event => {
                         if (event.data && event.data.action === 'reloadPage') {
-                            alert('アプリが更新されました。ページをリロードします。');
                             window.location.reload();
                         }
                     });
@@ -1232,6 +1233,16 @@ const uiUtils = {
         this.setSendingState(false); // 送信状態解除
     },
 
+    // チャットコンテナの最上部へスクロール
+    scrollToTop() {
+        requestAnimationFrame(() => { // 次の描画タイミングで実行
+            const mainContent = elements.chatScreen.querySelector('.main-content');
+            if (mainContent) {
+                mainContent.scrollTop = 0;
+            }
+        });
+    },
+
     // チャットコンテナの最下部へスクロール
     scrollToBottom() {
         requestAnimationFrame(() => { // 次の描画タイミングで実行
@@ -1895,7 +1906,7 @@ const apiUtils = {
         console.log("Geminiへの送信データ:", JSON.stringify(requestBody, (key, value) => {
             // Base64データはログで見やすく省略
             if (key === 'data' && typeof value === 'string' && value.length > 100) {
-                return value.substring(0, 50) + '...[省略]...' + value.substring(value.length - 20);
+                return value.substring(0, 50) + OMISSION_TEXT + value.substring(value.length - 20);
             }
             return value;
         }, 2));
@@ -2125,6 +2136,10 @@ const appLogic = {
         }
         // バージョン表示
         elements.appVersionSpan.textContent = APP_VERSION;
+        const fe4lcAppVersionSpan = document.getElementById('fe4lc-app-version');
+        if (fe4lcAppVersionSpan) {
+            fe4lcAppVersionSpan.textContent = FE4LC_APP_VERSION;
+        }
         // PWAインストールプロンプトのデフォルト動作を抑制
         window.addEventListener('beforeinstallprompt', (event) => {
             event.preventDefault();
@@ -2176,6 +2191,11 @@ const appLogic = {
             } else {
                 this.startNewChat(); // 履歴がなければ新規チャット
             }
+            
+            // 圧縮ボタンのテキストを更新
+            if (typeof updateCompressButtonText === 'function') {
+                updateCompressButtonText();
+            }
 
             // 初期状態を履歴スタックに設定 (loadChat/startNewChatの後)
             history.replaceState({ screen: 'chat' }, '', '#chat');
@@ -2208,7 +2228,7 @@ const appLogic = {
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
         elements.promptCheckBtn.addEventListener('click', () => {
 			// プロンプト確認画面に表示するデータを構築
-			const promptData = this.buildPromptDataForCheck();
+			const promptData = buildPromptDataForCheck();
 			elements.promptContent.textContent = promptData;
 			uiUtils.showScreen('prompt-check');
 		});
@@ -2574,6 +2594,10 @@ const appLogic = {
         elements.userInput.value = ''; // 入力欄クリア
         uiUtils.adjustTextareaHeight(); // 高さ調整
         uiUtils.setSendingState(false); // 送信状態リセット
+        // 圧縮ボタンのテキストを更新
+        if (typeof updateCompressButtonText === 'function') {
+            updateCompressButtonText();
+        }
     },
 
     // 指定IDのチャットを読み込む
@@ -2641,6 +2665,7 @@ const appLogic = {
                 state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
                 uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
                 uiUtils.renderChatMessages(); // メッセージ表示更新 (正規化された isSelected を反映)
+                uiUtils.scrollToBottom(); // チャット切り替え時に最下部にスクロール
                 uiUtils.updateChatTitle(chat.title); // タイトル更新
                 elements.userInput.value = ''; // 入力欄クリア
                 uiUtils.adjustTextareaHeight();
@@ -2657,6 +2682,10 @@ const appLogic = {
                 history.replaceState({ screen: 'chat' }, '', '#chat');
                 state.currentScreen = 'chat';
                 console.log("チャット読み込み完了:", id, "履歴状態を #chat に設定");
+                // 圧縮ボタンのテキストを更新
+                if (typeof updateCompressButtonText === 'function') {
+                    updateCompressButtonText();
+                }
             } else {
                 // チャットが見つからない場合
                 await uiUtils.showCustomAlert("チャット履歴が見つかりませんでした。");
@@ -4367,69 +4396,7 @@ const appLogic = {
         }
     },
 
-    // プロンプト確認用のデータを構築
-    buildPromptDataForCheck() {
-        // 保存されたリクエスト内容があればそれを表示、なければ未送信メッセージを表示
-        if (state.lastSentRequest) {
-            // テキストを短縮表示するためのヘルパー関数
-            const shortenText = (text) => {
-                if (text.length <= 100) {
-                    return text;
-                }
-                const first30 = text.substring(0, 30);
-                const last30 = text.substring(text.length - 30);
-                return `${first30}～${last30}：トータル${text.length}字`;
-            };
-            
-            // リクエストデータをディープコピーして短縮処理
-            const shortenedRequest = JSON.parse(JSON.stringify(state.lastSentRequest));
-            
-            // contentsの各メッセージのpartsを処理
-            if (shortenedRequest.contents) {
-                shortenedRequest.contents.forEach(content => {
-                    if (content.parts) {
-                        content.parts.forEach(part => {
-                            if (part.text) {
-                                part.text = shortenText(part.text);
-                            }
-                            // inlineData（添付ファイル）の場合はdataを置き換え
-                            if (part.inlineData) {
-                                part.inlineData.data = "【添付ファイルデータ】";
-                            }
-                        });
-                    }
-                });
-            }
-            
-            // partsの部分は改行なしにするためのカスタムJSON文字列化
-            const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
-                const indent = ' '.repeat(space * currentDepth);
-                const nextIndent = ' '.repeat(space * (currentDepth + 1));
-                
-                if (Array.isArray(obj)) {
-                    if (obj.length === 0) return '[]';
-                    // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
-                    if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
-                        return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
-                    }
-                    return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
-                }
-                
-                if (obj && typeof obj === 'object') {
-                    const keys = Object.keys(obj);
-                    if (keys.length === 0) return '{}';
-                    return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
-                }
-                
-                return JSON.stringify(obj);
-            };
-            
-            return customStringify(shortenedRequest);
-        }
-        
-        // 保存されたリクエストがない場合
-        return "送信された内容はありません";
-    },
+
 
     // 添付を確定する処理
     async confirmAttachment() {
