@@ -146,7 +146,7 @@ const elements = {
     newChatBtn: document.getElementById('new-chat-btn'),
     promptCheckBtn: document.getElementById('prompt-check-btn'),
     compressContextBtn: document.getElementById('compress-context-btn'),
-    compressionModeToggle: document.getElementById('compression-mode-toggle'),
+    clearCompressionBtn: document.getElementById('clear-compression-btn'),
 
     saveSettingsBtns: document.querySelectorAll('.js-save-settings-btn'),
     updateAppBtn: document.getElementById('update-app-btn'),
@@ -216,6 +216,7 @@ const state = {
         compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
         keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
         keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
+        compressionPromptTokenCount: null, // 圧縮プロンプトのトークン数（キャッシュ用）
     },
     backgroundImageUrl: null, // 生成されたオブジェクトURL (DBには保存しない)
     isSending: false,
@@ -578,6 +579,8 @@ const dbUtils = {
                     title: title,
                     // 圧縮データを保存
                     ...(state.compressedSummary && { compressedSummary: state.compressedSummary }),
+                    // 最後に送信したリクエスト内容を保存
+                    ...(state.lastSentRequest && { lastSentRequest: state.lastSentRequest }),
                 };
                 if (chatIdForOperation) { // IDがあれば更新なのでIDを付与
                     chatData.id = chatIdForOperation;
@@ -808,12 +811,12 @@ const uiUtils = {
     },
 
     // メッセージをコンテナに追加
-    appendMessage(role, content, index, isStreamingPlaceholder = false, cascadeInfo = null, attachments = null) {
+    appendMessage(role, content, index, isStreamingPlaceholder = false, cascadeInfo = null, attachments = null, skipStateUpdate = false) {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', role);
         messageDiv.dataset.index = index; // state.currentMessages 内のインデックス
 
-        const messageData = state.currentMessages[index]; // メッセージデータを取得
+        const messageData = skipStateUpdate ? undefined : state.currentMessages[index]; // メッセージデータを取得
         
         // Thought Summary 表示エリア (モデル応答で thoughtSummary がある場合)
         if (role === 'model' && messageData && messageData.thoughtSummary) {
@@ -1611,8 +1614,6 @@ const uiUtils = {
             elements.sendButton.disabled = false; // 停止ボタンは常に有効
             elements.userInput.disabled = true; // 入力欄無効化
             elements.attachFileBtn.disabled = true; // 添付ボタンも無効化
-            elements.loadingIndicator.classList.remove('hidden'); // ローディング表示
-            elements.loadingIndicator.setAttribute('aria-live', 'polite'); // スクリーンリーダー用
             // システムプロンプト編集も不可にする
             elements.systemPromptDetails.style.pointerEvents = 'none';
             elements.systemPromptDetails.style.opacity = '0.7';
@@ -1624,11 +1625,20 @@ const uiUtils = {
             elements.sendButton.disabled = elements.userInput.value.trim() === '';
             elements.userInput.disabled = false; // 入力欄有効化
             elements.attachFileBtn.disabled = false; // 添付ボタン有効化
-            elements.loadingIndicator.classList.add('hidden'); // ローディング非表示
-            elements.loadingIndicator.removeAttribute('aria-live');
             // システムプロンプト編集を可能にする
             elements.systemPromptDetails.style.pointerEvents = '';
             elements.systemPromptDetails.style.opacity = '';
+        }
+    },
+
+    // ローディングインジケータの制御（APIリクエスト用）
+    setLoadingIndicator(show) {
+        if (show) {
+            elements.loadingIndicator.classList.remove('hidden');
+            elements.loadingIndicator.setAttribute('aria-live', 'polite');
+        } else {
+            elements.loadingIndicator.classList.add('hidden');
+            elements.loadingIndicator.removeAttribute('aria-live');
         }
     },
 
@@ -2179,11 +2189,6 @@ const appLogic = {
             // 読み込んだ全設定をUIフィールドに適用
             uiUtils.applySettingsToUI();
 
-            // 圧縮モードの状態を設定から読み込んでUIに反映
-            state.isCompressionMode = state.settings.compressionMode !== undefined ? state.settings.compressionMode : true;
-            elements.compressionModeToggle.textContent = state.isCompressionMode ? '📄' : '📝';
-            elements.compressionModeToggle.title = state.isCompressionMode ? '圧縮モード: ON' : '圧縮モード: OFF';
-
             // 最新のチャットを読み込むか、新規チャットを開始
             const chats = await dbUtils.getAllChats(state.settings.historySortOrder);
             if (chats && chats.length > 0) {
@@ -2233,18 +2238,23 @@ const appLogic = {
         uiUtils.showScreen('prompt-check');
     });
         
-        elements.compressionModeToggle.addEventListener('click', () => {
-            state.isCompressionMode = !state.isCompressionMode;
-            // ボタンの見た目を更新
-            elements.compressionModeToggle.textContent = state.isCompressionMode ? '📄' : '📝';
-            elements.compressionModeToggle.title = state.isCompressionMode ? '圧縮モード: ON' : '圧縮モード: OFF';
-            console.log(`圧縮モード: ${state.isCompressionMode ? 'ON' : 'OFF'}`);
-            
-            // 設定を保存
-            state.settings.compressionMode = state.isCompressionMode;
-            dbUtils.saveSetting('compressionMode', state.isCompressionMode).catch(error => {
-                console.error('圧縮モード設定の保存に失敗:', error);
-            });
+        // 圧縮破棄ボタン
+        elements.clearCompressionBtn.addEventListener('click', async () => {
+            if (state.compressedSummary) {
+                const confirmed = await uiUtils.showCustomConfirm("圧縮データを破棄しますか？");
+                if (confirmed) {
+                    delete state.compressedSummary;
+                    await dbUtils.saveChat(); // チャットを保存
+                    // ボタンの表示を更新
+                    if (typeof updateCompressButtonText === 'function') {
+                        updateCompressButtonText();
+                    }
+                    // トークン表示を更新（圧縮データ削除後は非表示になる）
+                    if (typeof tokenUtils !== 'undefined' && tokenUtils.updateTokenDisplay) {
+                        tokenUtils.updateTokenDisplay();
+                    }
+                }
+            }
         });
         
         // 戻るボタンは history.back() を使用
@@ -2324,6 +2334,20 @@ const appLogic = {
             state.settings.hideSystemPromptInChat = elements.hideSystemPromptToggle.checked;
             uiUtils.toggleSystemPromptVisibility(); // UIを即時更新
             // 注意: DBへの保存は「設定を保存」ボタンで行われる
+        });
+
+        // 圧縮プロンプト変更リスナー（トークン数リセット用）
+        elements.compressionPromptTextarea.addEventListener('input', async () => {
+            // 圧縮プロンプトが変更されたらトークン数をリセット
+            state.settings.compressionPromptTokenCount = null;
+            
+            // IndexedDBにも保存
+            try {
+                await dbUtils.saveSetting('compressionPromptTokenCount', null);
+                console.log('圧縮プロンプトのトークン数をIndexedDBでリセットしました');
+            } catch (error) {
+                console.error('圧縮プロンプトのトークン数リセットに失敗:', error);
+            }
         });
         
         // --- メッセージクリックで操作ボックス表示/非表示 ---
@@ -2584,10 +2608,6 @@ const appLogic = {
         state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
-        // 圧縮モードを設定から読み込んだ状態にリセット
-        state.isCompressionMode = state.settings.compressionMode !== undefined ? state.settings.compressionMode : true;
-        elements.compressionModeToggle.textContent = state.isCompressionMode ? '📄' : '📝';
-        elements.compressionModeToggle.title = state.isCompressionMode ? '圧縮モード: ON' : '圧縮モード: OFF';
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
         uiUtils.renderChatMessages(); // 表示クリア
         uiUtils.updateChatTitle(); // タイトルを「新規チャット」に
@@ -2661,8 +2681,9 @@ const appLogic = {
                 state.currentSystemPrompt = chat.systemPrompt !== undefined ? chat.systemPrompt : state.settings.systemPrompt;
                 // 圧縮データを読み込み
                 state.compressedSummary = chat.compressedSummary || null;
+                // 最後に送信したリクエスト内容を読み込み
+                state.lastSentRequest = chat.lastSentRequest || null;
                 state.pendingAttachments = []; // 保留中の添付ファイルをクリア
-                state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
                 uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
                 uiUtils.renderChatMessages(); // メッセージ表示更新 (正規化された isSelected を反映)
                 uiUtils.scrollToBottom(); // チャット切り替え時に最下部にスクロール
@@ -2755,6 +2776,8 @@ const appLogic = {
                     messages: duplicatedMessages,
                     systemPrompt: chat.systemPrompt || '', // システムプロンプトもコピー
                     updatedAt: Date.now(), // 更新/作成日時は現在
+                    // 最後に送信したリクエスト内容もコピー
+                    ...(chat.lastSentRequest && { lastSentRequest: chat.lastSentRequest }),
                     createdAt: Date.now(),
                     title: newTitle,
                     // 圧縮データもコピー
@@ -3100,6 +3123,9 @@ const appLogic = {
         let finalUsageMetadataFromStream = null; // ストリーム中の最新のusageMetadata
 
         try {
+            // ローディングインジケータを表示
+            uiUtils.setLoadingIndicator(true);
+            
             const response = await apiUtils.callGeminiApi(apiMessages, generationConfig, systemInstruction);
             const dummyModelPrefix = (state.settings.concatDummyModel && state.settings.enableDummyModel && state.settings.dummyModel) ? state.settings.dummyModel : '';
             state.partialStreamContent = dummyModelPrefix; // プレフィックスを初期値に設定
@@ -3335,6 +3361,8 @@ const appLogic = {
         } finally {
             // --- 6. 送信後処理 ---
             uiUtils.setSendingState(false);
+            // ローディングインジケータを非表示
+            uiUtils.setLoadingIndicator(false);
             state.abortController = null;
             state.partialStreamContent = '';
             state.partialThoughtStreamContent = '';
@@ -3419,7 +3447,8 @@ const appLogic = {
                     systemPrompt: importedSystemPrompt || '', // インポートされたシステムプロンプト
                     updatedAt: Date.now(),
                     createdAt: Date.now(),
-                    title: newTitle.substring(0, 100) // 100文字制限
+                    title: newTitle.substring(0, 100), // 100文字制限
+                    // インポート時は lastSentRequest は設定しない（新規チャットとして扱う）
                 };
 
                 // 新しいチャットとしてDBに追加

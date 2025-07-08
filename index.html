@@ -19,6 +19,7 @@
                 <h1 id="chat-title">新規チャット</h1>
                 <button id="new-chat-btn" class="new-chat-button" title="新規チャットを開始">新規</button>
                 <button id="compress-context-btn" class="compress-button" title="コンテキスト圧縮">圧縮</button>
+                <button id="clear-compression-btn" class="compress-button" title="圧縮破棄" style="display: none;">🗑️</button>
                 <button id="scroll-to-top-btn" class="header-button" aria-label="最上部へ移動" title="最上部へ移動">🔼</button>
                 <button id="scroll-to-bottom-btn" class="header-button" aria-label="最下部へ移動" title="最下部へ移動">🔽</button>
                 <button id="goto-settings-btn" class="header-button" aria-label="設定へ">⚙</button>
@@ -49,7 +50,6 @@
             </main>
             <footer class="chat-input-area">
                 <button id="prompt-check-btn" class="prompt-check-button" title="プロンプト確認" aria-label="プロンプト確認">🔍</button>
-                <button id="compression-mode-toggle" class="prompt-check-button" title="圧縮モード切替" aria-label="圧縮モード切替">📝</button>
                 <textarea id="user-input" placeholder="メッセージを入力..." rows="1" aria-label="メッセージ入力"></textarea>
                 <!-- 添付ファイルボタンを追加 -->
                 <button id="attach-file-btn" title="ファイルを添付">+<span class="attachment-badge"></span></button>

@@ -2,6 +2,9 @@
 
 // 定数定義
 const COMPRESSED_SUMMARY_PREFIX = '[summary]';
+const COMPRESSION_COMPLETION_MESSAGE = (compressedCount) => `圧縮が完了しました（${compressedCount}メッセージを要約）`;
+
+
 
 // トークン計算機能
 const tokenUtils = {
@@ -46,23 +49,17 @@ const tokenUtils = {
     formatTotalTokens(totalTokens) {
         if (totalTokens === 0) return '';
         
-        // 圧縮状態を判定
-        let compressionStatus = '[not compressed]';
-        if (state.compressedSummary) {
-            const startIndex = state.compressedSummary.startIndex;
-            const endIndex = state.compressedSummary.endIndex;
-            const msgCount = endIndex - startIndex + 1;
-            compressionStatus = `[compressed ~${msgCount} msgs]`;
-        }
+        // 圧縮状態でない場合は表示しない
+        if (!state.compressedSummary) return '';
         
-        if (state.compressedSummary) {
-            // 圧縮後の場合、本来のトークン数も計算
-            const originalTokens = this.calculateOriginalTokens(state.currentMessages);
-            const originalK = Math.round(originalTokens / 1000);
-            return `${compressionStatus} Total ${totalTokens.toLocaleString('en-US')} Tokens (Original: ~${originalK}k)`;
-        } else {
-            return `${compressionStatus} Total ${totalTokens.toLocaleString('en-US')} Tokens`;
-        }
+        const startIndex = state.compressedSummary.startIndex;
+        const endIndex = state.compressedSummary.endIndex;
+        const msgCount = endIndex - startIndex + 1;
+        const compressionStatus = `[compressed ~${msgCount} msgs]`;
+        
+        const originalTokens = this.calculateOriginalTokens(state.currentMessages);
+        const originalK = Math.round(originalTokens / 1000);
+        return `${compressionStatus} Total ${totalTokens.toLocaleString('en-US')} Tokens (Original: ~${originalK}k)`;
     },
 
     // トークン表示を更新
@@ -104,6 +101,34 @@ const compressionUtils = {
         }
         // エラーの場合は概算（文字数÷4）
         return Math.ceil(text.length / 4);
+    },
+
+    // 圧縮プロンプトのトークン数を取得（state.settings対応）
+    async getCompressionPromptTokens(compressionPrompt) {
+        // state.settingsにトークン数が保存されている場合はそれを使用
+        if (state.settings.compressionPromptTokenCount !== null && 
+            state.settings.compressionPromptTokenCount !== undefined) {
+            console.log('圧縮プロンプトのトークン数を設定から取得:', state.settings.compressionPromptTokenCount);
+            return state.settings.compressionPromptTokenCount;
+        }
+
+        // 保存されていない場合は新規取得
+        console.log('圧縮プロンプトのトークン数を新規取得');
+        const tokenCount = await this.countTokens(compressionPrompt);
+        
+        // state.settingsに保存
+        state.settings.compressionPromptTokenCount = tokenCount;
+        console.log('圧縮プロンプトのトークン数を設定に保存:', tokenCount);
+        
+        // IndexedDBに保存
+        try {
+            await dbUtils.saveSetting('compressionPromptTokenCount', tokenCount);
+            console.log('圧縮プロンプトのトークン数をIndexedDBに保存しました');
+        } catch (error) {
+            console.error('圧縮プロンプトのトークン数保存に失敗:', error);
+        }
+        
+        return tokenCount;
     },
 
     // 設定に従ってメッセージを抽出
@@ -230,11 +255,21 @@ const compressionUtils = {
 
         console.log(`圧縮対象: ${extracted.compressedCount}件のメッセージ`);
 
+        // UI制御開始
+        compressionUI.startCompression();
+
+        // 圧縮プロンプトをチャットに表示（一時的な表示のみ）
+        uiUtils.appendMessage('user', compressionPrompt, -1, false, null, null, true);
+        uiUtils.scrollToBottom();
+
         // 圧縮用のメッセージ配列を構築
         const apiMessages = this.buildCompressionMessages(extracted.middleMessages, compressionPrompt);
 
         // 圧縮用のAPI呼び出し
         try {
+            // ローディングインジケータを表示
+            uiUtils.setLoadingIndicator(true);
+            
             const generationConfig = {
                 temperature: 0.3 // 要約なので低めの温度
             };
@@ -274,6 +309,10 @@ const compressionUtils = {
                         }
                     });
 
+                    // 圧縮完了メッセージを表示（一時的な表示のみ）
+                    uiUtils.appendMessage('assistant', COMPRESSION_COMPLETION_MESSAGE(extracted.compressedCount), -1, false, null, null, true);
+                    uiUtils.scrollToBottom();
+
                     // 圧縮結果をstateに保存
                     const { middleMessages } = extracted;
                     let compressedStartIndex = -1;
@@ -300,8 +339,8 @@ const compressionUtils = {
                         compressedTokens = Math.ceil(compressedContent.length / 4);
                     }
 
-                    // 圧縮指示文のトークン数を取得
-                    const compressionPromptTokens = await this.countTokens(compressionPrompt);
+                    // 圧縮指示文のトークン数を取得（キャッシュ対応）
+                    const compressionPromptTokens = await this.getCompressionPromptTokens(compressionPrompt);
 
                     // 圧縮対象メッセージの実際のトークン数を計算
                     const originalTokens = promptTokenCount - compressionPromptTokens;
@@ -335,17 +374,26 @@ const compressionUtils = {
                     try {
                         await dbUtils.saveChat();
                         console.log('圧縮データをIndexedDBに保存しました');
-                        // 圧縮ボタンのテキストを更新
-                        updateCompressButtonText();
                     } catch (error) {
                         console.error('圧縮データの保存に失敗しました:', error);
                     }
                 } else {
                     console.error('圧縮API応答に有効なコンテンツがありません');
+                    // エラーメッセージを表示（一時的な表示のみ）
+                    uiUtils.appendMessage('assistant', '圧縮処理に失敗しました。API応答に有効なコンテンツがありません。', -1, false, null, null, true);
+                    uiUtils.scrollToBottom();
                 }
             }
         } catch (error) {
             console.error('圧縮処理中にエラーが発生しました:', error);
+            // エラーメッセージを表示（一時的な表示のみ）
+            uiUtils.appendMessage('assistant', `圧縮処理中にエラーが発生しました: ${error.message}`, -1, false, null, null, true);
+            uiUtils.scrollToBottom();
+        } finally {
+            // ローディングインジケータを非表示
+            uiUtils.setLoadingIndicator(false);
+            // UI制御終了
+            compressionUI.endCompression();
         }
     }
 };
@@ -366,7 +414,15 @@ const scrollUtils = {
 // 圧縮ボタンのテキストを更新
 function updateCompressButtonText() {
     const compressButton = document.getElementById('compress-context-btn');
+    const clearButton = document.getElementById('clear-compression-btn');
+    
     if (compressButton) {
+        // ボタンを有効化
+        compressButton.disabled = false;
+        // 強制的にスタイルをリセット
+        compressButton.style.backgroundColor = '';
+        compressButton.style.cursor = '';
+        
         if (state.compressedSummary) {
             compressButton.textContent = '再圧縮';
             compressButton.title = '既存の圧縮データを上書きして再圧縮します';
@@ -375,7 +431,57 @@ function updateCompressButtonText() {
             compressButton.title = '会話の中間部分を要約して圧縮します';
         }
     }
+    
+    // 圧縮破棄ボタンの表示/非表示を切り替え
+    if (clearButton) {
+        if (state.compressedSummary) {
+            clearButton.style.display = 'inline-block';
+            clearButton.title = '圧縮データを破棄します';
+            clearButton.disabled = false; // 有効化
+        } else {
+            clearButton.style.display = 'none';
+        }
+    }
 }
+
+// 圧縮処理用のUI制御
+const compressionUI = {
+    // 圧縮処理開始時のUI制御
+    startCompression() {
+        // 圧縮ボタンを無効化
+        const compressButton = document.getElementById('compress-context-btn');
+        if (compressButton) {
+            compressButton.disabled = true;
+            compressButton.textContent = '圧縮中...';
+            compressButton.classList.add('sending');
+        }
+        
+        // 圧縮破棄ボタンも無効化
+        const clearButton = document.getElementById('clear-compression-btn');
+        if (clearButton) {
+            clearButton.disabled = true;
+        }
+    },
+    
+    // 圧縮処理終了時のUI制御
+    endCompression() {
+        // 圧縮ボタンを有効化してテキストを更新
+        const compressButton = document.getElementById('compress-context-btn');
+        if (compressButton) {
+            compressButton.classList.remove('sending');
+            // 強制的にスタイルをリセット
+            compressButton.style.backgroundColor = '';
+            compressButton.style.cursor = '';
+        }
+        updateCompressButtonText();
+        
+        // 圧縮破棄ボタンを有効化
+        const clearButton = document.getElementById('clear-compression-btn');
+        if (clearButton && state.compressedSummary) {
+            clearButton.disabled = false;
+        }
+    }
+};
 
 // プロンプト確認用のデータを構築
 function buildPromptDataForCheck() {
