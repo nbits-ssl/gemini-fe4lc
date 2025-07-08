@@ -3112,8 +3112,11 @@ const appLogic = {
             requestBody.tools = [{ "google_search": {} }];
         }
 
-        // 送信リクエスト内容を保存
-        state.lastSentRequest = requestBody;
+        // 送信リクエスト内容を保存（送信時刻も含める）
+        state.lastSentRequest = {
+            ...requestBody,
+            sentAt: Date.now()
+        };
 
         // --- 5. API呼び出しと応答処理 ---
         let modelResponseRawContent = '';

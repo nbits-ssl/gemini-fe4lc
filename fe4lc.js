@@ -487,6 +487,19 @@ const compressionUI = {
 function buildPromptDataForCheck() {
     // 保存されたリクエスト内容があればそれを表示、なければ未送信メッセージを表示
     if (state.lastSentRequest) {
+        // 送信時刻を表示
+        let result = '';
+        if (state.lastSentRequest.sentAt) {
+            const sentDate = new Date(state.lastSentRequest.sentAt);
+            const formattedDate = sentDate.getFullYear() + '/' + 
+                String(sentDate.getMonth() + 1).padStart(2, '0') + '/' + 
+                String(sentDate.getDate()).padStart(2, '0') + ' ' +
+                String(sentDate.getHours()).padStart(2, '0') + ':' + 
+                String(sentDate.getMinutes()).padStart(2, '0') + ':' + 
+                String(sentDate.getSeconds()).padStart(2, '0');
+            result = `Last sent: ${formattedDate}\n\n`;
+        }
+        
         // テキストを短縮表示するためのヘルパー関数
         const shortenText = (text) => {
             if (text.length <= 100) {
@@ -499,6 +512,9 @@ function buildPromptDataForCheck() {
         
         // リクエストデータをディープコピーして短縮処理
         const shortenedRequest = JSON.parse(JSON.stringify(state.lastSentRequest));
+        
+        // sentAtフィールドを削除（表示用データから除外）
+        delete shortenedRequest.sentAt;
         
         // contentsの各メッセージのpartsを処理
         if (shortenedRequest.contents) {
@@ -518,9 +534,10 @@ function buildPromptDataForCheck() {
                             part.inlineData.data = "【添付ファイルデータ】";
                         }
                     });
-            }
-        });
-    }
+                }
+            });
+        }
+        
         
         // partsの部分は改行なしにするためのカスタムJSON文字列化
         const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
@@ -545,7 +562,7 @@ function buildPromptDataForCheck() {
             return JSON.stringify(obj);
         };
         
-        return customStringify(shortenedRequest);
+        return result + customStringify(shortenedRequest);
     }
     
     // 保存されたリクエストがない場合
