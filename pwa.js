@@ -3874,7 +3874,8 @@ const appLogic = {
             textarea.value = rawContent;
             textarea.classList.add('edit-textarea');
             textarea.rows = 3; // 初期行数
-            textarea.oninput = () => uiUtils.adjustTextareaHeight(textarea, 400); // 入力で高さ調整 (最大400px)
+            // textarea.oninput = () => uiUtils.adjustTextareaHeight(textarea, 400); // 入力で高さ調整 (最大400px)
+			// 一番下のメッセージを編集するときに、チャット欄のスクロールバーのカクツキが発生するため、コメントアウト
 
             // アクションボタンエリア作成
             const actionsDiv = document.createElement('div');
