@@ -2337,3 +2337,70 @@ body.dark-mode .compression-status-summary-content {
     background-color: var(--bg-secondary);
     border-color: var(--border-primary);
 }
+
+/* 圧縮サマリー編集用スタイル */
+.compression-summary-textarea {
+    width: 100%;
+    min-height: 240px;
+    padding: 8px;
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.compression-summary-textarea:focus {
+    outline: none;
+    border-color: var(--bg-button);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.compression-summary-notice {
+    margin: 8px 0;
+    padding: 0;
+}
+
+.compression-summary-notice small {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.compression-summary-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.update-compression-btn {
+    background-color: var(--bg-button-update);
+    color: var(--text-light);
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.update-compression-btn:hover {
+    background-color: var(--bg-button-update-hover);
+}
+
+body.dark-mode .compression-summary-textarea {
+    background-color: var(--bg-input);
+    border-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+body.dark-mode .compression-summary-textarea:focus {
+    border-color: var(--bg-button);
+    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+}

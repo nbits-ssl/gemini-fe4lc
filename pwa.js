@@ -15,7 +15,7 @@ const DEFAULT_TOP_K = 40;
 const DEFAULT_TOP_P = 0.95;
 const DEFAULT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'; // デフォルトフォント
 const DEFAULT_COMPRESSION_PROMPT = 'これまでのやり取りで起こった事実関係とその時の登場人物の振る舞いを詳細にまとめて。要約データとして扱うので、既存のフォーマットは無視。Markdownにもせずに、小説の「あらすじ」として通用するような形で。';
-const DEFAULT_KEEP_FIRST_MESSAGES = 20;
+const DEFAULT_KEEP_FIRST_MESSAGES = 10;
 const DEFAULT_KEEP_LAST_MESSAGES = 20;
 const CHAT_TITLE_LENGTH = 15;
 const TEXTAREA_MAX_HEIGHT = 120;
@@ -4678,9 +4678,9 @@ const appLogic = {
         item.innerHTML = `
             <div class="response-replacement-form">
                 <div class="response-replacement-form-row">
-                    <input type="text" value="${replacement.pattern}" class="replacement-input" disabled autocomplete="off">
+                    <input type="text" id="fe4lc-avoid-pattern-${index}" name="fe4lc-avoid-pattern" value="${replacement.pattern}" class="replacement-input" disabled autocomplete="off">
                     <span class="replacement-arrow">➡️</span>
-                    <input type="text" value="${replacement.replacement}" class="replacement-input" disabled autocomplete="off">
+                    <input type="text" id="fe4lc-avoid-replacement-${index}" name="fe4lc-avoid-replacement" value="${replacement.replacement}" class="replacement-input" disabled autocomplete="off">
                 </div>
                 <div class="response-replacement-form-actions">
                     <button class="move-up-btn" title="上に移動">🔼</button>
@@ -4725,9 +4725,9 @@ const appLogic = {
         item.innerHTML = `
             <div class="response-replacement-form">
                 <div class="response-replacement-form-row">
-                    <input type="text" id="replacement-pattern-${index}" value="${replacement.pattern || ''}" placeholder="検索パターン (正規表現)" class="replacement-input" autocomplete="off">
+                    <input type="text" id="fe4lc-avoid-edit-pattern-${index}" name="fe4lc-avoid-edit-pattern" value="${replacement.pattern || ''}" placeholder="検索パターン (正規表現)" class="replacement-input" autocomplete="off">
                     <span class="replacement-arrow">➡️</span>
-                    <input type="text" id="replacement-replacement-${index}" value="${replacement.replacement || ''}" placeholder="置換テキスト" class="replacement-input" autocomplete="off">
+                    <input type="text" id="fe4lc-avoid-edit-replacement-${index}" name="fe4lc-avoid-edit-replacement" value="${replacement.replacement || ''}" placeholder="置換テキスト" class="replacement-input" autocomplete="off">
                 </div>
                 <div class="response-replacement-form-actions">
                     <button class="save-btn" title="保存">保存</button>
@@ -4761,8 +4761,8 @@ const appLogic = {
 
     // レスポンス置換の保存
     saveResponseReplacement(index) {
-        const patternInput = document.getElementById(`replacement-pattern-${index}`);
-        const replacementInput = document.getElementById(`replacement-replacement-${index}`);
+        const patternInput = document.getElementById(`fe4lc-avoid-edit-pattern-${index}`);
+        const replacementInput = document.getElementById(`fe4lc-avoid-edit-replacement-${index}`);
 
         if (!patternInput || !replacementInput) return;
 
@@ -4900,9 +4900,49 @@ const appLogic = {
                 
                 <div class="compression-status-summary">
                     <div class="compression-status-summary-label">圧縮サマリー</div>
-                    <div class="compression-status-summary-content">${summary.summary}</div>
+                    <div class="compression-summary-content">
+                        <textarea id="compression-summary-edit" class="compression-summary-textarea" placeholder="">${summary.summary}</textarea>
+                        <div class="compression-summary-actions">
+                            <button id="update-compression-summary-btn" class="update-compression-btn">更新</button>
+                        </div>
+                        <div class="compression-summary-notice">
+                            <small>※ サマリーを更新しても圧縮情報（範囲、トークン数など）は更新されません</small>
+                        </div>
+                    </div>
                 </div>
         `;
+
+        // 更新ボタンのイベントリスナーを追加
+        const updateBtn = compressionStatusContent.querySelector('#update-compression-summary-btn');
+        if (updateBtn) {
+            updateBtn.onclick = () => this.updateCompressionSummary();
+        }
+
+
+    },
+
+    // 圧縮サマリーを更新
+    async updateCompressionSummary() {
+        const textarea = document.getElementById('compression-summary-edit');
+        if (!textarea || !state.compressedSummary) return;
+
+        const newSummary = textarea.value.trim();
+        if (!newSummary) {
+            uiUtils.showCustomAlert('圧縮サマリーを入力してください');
+            return;
+        }
+
+        // 圧縮サマリーを更新
+        state.compressedSummary.summary = newSummary;
+
+        // IndexedDBに保存
+        try {
+            await dbUtils.saveChat();
+            uiUtils.showCustomAlert('圧縮サマリーを更新しました');
+        } catch (error) {
+            console.error('圧縮サマリー更新エラー:', error);
+            uiUtils.showCustomAlert('圧縮サマリーの更新に失敗しました');
+        }
     }
 
 }; // appLogic終了
