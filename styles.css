@@ -1845,3 +1845,495 @@ body.dark-mode #clear-compression-btn:hover {
 body.dark-mode .responding-spinner {
   filter: drop-shadow(0 0 6px #00aaff);
 }
+
+/* --- タブUI スタイル --- */
+.tab-navigation {
+    display: flex;
+    border-bottom: 2px solid var(--border-primary);
+    margin-bottom: 20px;
+    background-color: var(--bg-primary);
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 12px 20px;
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+}
+
+.tab-button:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.tab-button.active {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-bottom-color: var(--bg-button);
+}
+
+.tab-content {
+    display: none;
+    padding: 20px 0;
+    height: calc(100vh - 150px); /* 固定の高さではなく、画面の高さに応じて可変 */
+    overflow-y: auto; /* 縦スクロールを有効化 */
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* --- レスポンス置換UI スタイル --- */
+.response-replacements-container {
+    max-width: 100%;
+}
+
+.response-replacements-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.response-replacements-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 18px;
+}
+
+.action-button {
+    background-color: var(--bg-button-save);
+    color: var(--text-light);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.action-button:hover {
+    background-color: var(--bg-button-save-hover);
+}
+
+.response-replacements-list {
+    margin-bottom: 20px;
+}
+
+.response-replacement-item {
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-secondary);
+    padding: 10px;
+}
+
+.response-replacement-item:hover {
+    border-color: var(--border-primary);
+}
+
+.response-replacement-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.response-replacement-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.response-replacement-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.response-replacement-actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.response-replacement-actions .edit-btn {
+    background-color: var(--bg-button-edit);
+}
+
+.response-replacement-actions .edit-btn:hover {
+    background-color: var(--bg-button-edit-hover);
+}
+
+.response-replacement-actions .delete-btn {
+    background-color: var(--bg-button-delete);
+}
+
+.response-replacement-actions .delete-btn:hover {
+    background-color: var(--bg-button-delete-hover);
+}
+
+.response-replacement-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+}
+
+.response-replacement-form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.replacement-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.replacement-input:focus {
+    outline: none;
+    border-color: var(--bg-button);
+}
+
+.replacement-input:disabled {
+    background-color: #f5f5f5;
+    color: var(--text-primary);
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+body.dark-mode .replacement-input:disabled {
+    background-color: #2a2a2a;
+    color: var(--text-primary);
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+.replacement-arrow {
+    color: var(--text-secondary);
+    font-weight: bold;
+    font-size: 24px;
+    margin: -12px 5px 0 5px;
+    display: flex;
+    align-items: center;
+    height: 32px;
+}
+
+.response-replacement-form .save-btn,
+.response-replacement-form .cancel-btn,
+.response-replacement-form .edit-btn,
+.response-replacement-form .delete-btn {
+    padding: 0px 12px;
+    font-size: 14px;
+    min-width: 60px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.response-replacement-form .save-btn {
+    background-color: var(--bg-button-save);
+    color: white;
+}
+
+.response-replacement-form .save-btn:hover {
+    background-color: var(--bg-button-save-hover);
+}
+
+.response-replacement-form .cancel-btn {
+    background-color: var(--bg-button-cancel);
+    color: white;
+}
+
+.response-replacement-form .cancel-btn:hover {
+    background-color: var(--bg-button-cancel-hover);
+}
+
+.response-replacement-form .edit-btn {
+    background-color: var(--bg-button-edit);
+    color: white;
+}
+
+.response-replacement-form .edit-btn:hover {
+    background-color: var(--bg-button-edit-hover);
+}
+
+.response-replacement-form .delete-btn {
+    background-color: var(--bg-button-delete);
+    color: white;
+}
+
+.response-replacement-form .delete-btn:hover {
+    background-color: var(--bg-button-delete-hover);
+}
+
+.response-replacement-form label {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.response-replacement-form input,
+.response-replacement-form textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-secondary);
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.response-replacement-form input:focus,
+.response-replacement-form textarea:focus {
+    outline: none;
+    border-color: var(--bg-button);
+}
+
+.response-replacement-form textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.response-replacement-form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 2px;
+}
+
+.response-replacement-form-actions button {
+    padding: 6px 12px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    min-width: 60px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.response-replacement-form-actions .save-btn {
+    background-color: var(--bg-button-save);
+    color: white;
+}
+
+.response-replacement-form-actions .save-btn:hover {
+    background-color: var(--bg-button-save-hover);
+}
+
+.response-replacement-form-actions .cancel-btn {
+    background-color: var(--bg-button-cancel);
+    color: white;
+}
+
+.response-replacement-form-actions .cancel-btn:hover {
+    background-color: var(--bg-button-cancel-hover);
+}
+
+.response-replacement-form-actions .edit-btn {
+    background-color: var(--bg-button-edit);
+    color: white;
+}
+
+.response-replacement-form-actions .edit-btn:hover {
+    background-color: var(--bg-button-edit-hover);
+}
+
+.response-replacement-form-actions .delete-btn {
+    background-color: var(--bg-button-delete);
+    color: white;
+}
+
+.response-replacement-form-actions .delete-btn:hover {
+    background-color: var(--bg-button-delete-hover);
+}
+
+.response-replacement-form-actions .move-up-btn,
+.response-replacement-form-actions .move-down-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    margin: -5px 0;
+    min-width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.response-replacement-form-actions .move-up-btn:hover,
+.response-replacement-form-actions .move-down-btn:hover {
+    color: var(--text-primary);
+}
+
+.response-replacements-info {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-tertiary);
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 20px;
+}
+
+.response-replacements-info p {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.response-replacements-info p:last-child {
+    margin-bottom: 0;
+}
+
+/* ダークモード対応 */
+body.dark-mode .tab-navigation {
+    border-bottom-color: var(--border-primary);
+}
+
+body.dark-mode .tab-button {
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
+body.dark-mode .tab-button:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+body.dark-mode .tab-button.active {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-bottom-color: var(--bg-button);
+}
+
+body.dark-mode .response-replacement-item {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
+
+body.dark-mode .response-replacement-item:hover {
+    border-color: var(--border-secondary);
+}
+
+body.dark-mode .response-replacements-info {
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-primary);
+}
+
+/* --- 圧縮状態タブ用スタイル --- */
+.compression-status-content {
+    padding: 0px;
+}
+
+.compression-status-info {
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.compression-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 25px;
+    margin-bottom: 20px;
+}
+
+.compression-status-item {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-tertiary);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.compression-status-item-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+}
+
+.compression-status-item-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.compression-status-summary {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-tertiary);
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.compression-status-summary-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.compression-status-summary-content {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 4px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+body.dark-mode .compression-status-item {
+    background-color: var(--bg-primary);
+    border-color: var(--border-primary);
+}
+
+body.dark-mode .compression-status-summary {
+    background-color: var(--bg-primary);
+    border-color: var(--border-primary);
+}
+
+body.dark-mode .compression-status-summary-content {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-primary);
+}

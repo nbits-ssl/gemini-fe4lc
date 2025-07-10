@@ -98,8 +98,49 @@
                 <button id="back-to-chat-from-prompt-check" class="header-button" aria-label="チャットへ戻る">＞</button>
             </header>
             <main class="main-content">
-                <div id="prompt-content" class="prompt-content">
-                    プロンプト内容がここに表示されます
+                <!-- タブナビゲーション -->
+                <div class="tab-navigation">
+                    <button class="tab-button active" data-tab="prompt">最終プロンプト</button>
+                    <button class="tab-button" data-tab="compression-status">圧縮情報</button>
+                    <button class="tab-button" data-tab="response-replacements">レスポンス置換</button>
+                </div>
+                
+                <!-- プロンプトタブ -->
+                <div id="prompt-tab" class="tab-content active">
+                    <div id="prompt-content" class="prompt-content">
+                        プロンプト内容がここに表示されます
+                    </div>
+                </div>
+                
+                <!-- 圧縮状態タブ -->
+                <div id="compression-status-tab" class="tab-content">
+                    <div id="compression-status-content" class="compression-status-content">
+                        <div class="compression-status-info">
+                            <p>圧縮データがありません</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- レスポンス置換タブ -->
+                <div id="response-replacements-tab" class="tab-content">
+                    <div class="response-replacements-container">
+                        <div class="response-replacements-header">
+                            <h3>レスポンス置換設定</h3>
+                            <button id="add-response-replacement-btn" class="action-button">追加</button>
+                        </div>
+                        
+                        <div id="response-replacements-list" class="response-replacements-list">
+                            <!-- レスポンス置換のリストがここに動的に追加される -->
+                        </div>
+                        
+                        <div class="response-replacements-info">
+                            <p>※ 正規表現を使用してモデルの応答を置き換えます</p>
+                            <p>※ キャプチャグループも使用可能です。検索パターンで()で囲んだ部分は置換テキストで$1, $2...で参照できます</p>
+                            <p>※ 置換テキストを空欄のままにしておくと、マッチした文字列をそのまま削除します</p>
+                            <p>※ 各チャットごとに設定が保存されます</p>
+                            <p>※ <a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Guide/Regular_Expressions" target="_blank" rel="noopener">正規表現リファレンス (MDN)</a></p>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>
@@ -344,8 +385,15 @@
                        デバッグ用の仮想送信を有効化（開発用）
                    </label>
                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: -5px; margin-bottom: 10px;">
-                       ※ チェック時、実際のAPI呼び出しをスキップし、空の応答を返す。<br>
+                       ※ チェック時、実際のAPI呼び出しをスキップし、設定した応答を返す。<br>
                        ※ デバッグ・テスト用。API料金が発生しない。
+                   </p>
+                   
+                   <label for="debug-virtual-response">デバッグ用の仮想送信の返答（レスポンス置き換えテスト用）:</label>
+                   <textarea id="debug-virtual-response" placeholder="例: これはテスト用の応答です。正規表現で置き換えテストができます。" aria-label="デバッグ用の仮想送信の返答"></textarea>
+                   <p style="font-size: 11px; color: var(--text-secondary); margin-top: -5px; margin-bottom: 10px;">
+                       ※ 仮想送信有効時、このテキストがモデルの応答として返される。<br>
+                       ※ レスポンス置き換え機能のテストに使用可能。
                    </p>
                 </div>
 
@@ -424,6 +472,7 @@
         </div>
     </dialog>
 
+    <script src="script/ResponseReplacer.js"></script>
     <script src="pwa.js"></script>
     <script src="fe4lc.js"></script>
     <script>

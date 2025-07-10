@@ -1,3 +1,5 @@
+// ResponseReplacerは通常のスクリプトとして読み込まれる
+
 // --- 定数 ---
 const DB_NAME = 'GeminiPWA_DB';
 const DB_VERSION = 8; // スキーマ変更なしのため据え置き
@@ -119,6 +121,7 @@ const elements = {
     concatDummyModelCheckbox: document.getElementById('concat-dummy-model'), // ダミーモデル連結チェックボックス
     additionalModelsTextarea: document.getElementById('additional-models'), // 追加モデル入力
     debugVirtualSendToggle: document.getElementById('debug-virtual-send-toggle'), // デバッグ用仮想送信トグル
+    debugVirtualResponseTextarea: document.getElementById('debug-virtual-response'), // デバッグ用仮想送信の返答
     pseudoStreamingCheckbox: document.getElementById('pseudo-streaming'),
     enterToSendCheckbox: document.getElementById('enter-to-send'),
     historySortOrderSelect: document.getElementById('history-sort-order'),
@@ -137,6 +140,13 @@ const elements = {
     backgroundThumbnail: document.getElementById('background-thumbnail'),
     deleteBackgroundBtn: document.getElementById('delete-background-btn'),
     promptContent: document.getElementById('prompt-content'),
+    // タブUI要素
+    tabButtons: document.querySelectorAll('.tab-button'),
+    promptTab: document.getElementById('prompt-tab'),
+    compressionStatusTab: document.getElementById('compression-status-tab'),
+    responseReplacementsTab: document.getElementById('response-replacements-tab'),
+    addResponseReplacementBtn: document.getElementById('add-response-replacement-btn'),
+    responseReplacementsList: document.getElementById('response-replacements-list'),
     // ボタン
     gotoHistoryBtn: document.getElementById('goto-history-btn'),
     gotoSettingsBtn: document.getElementById('goto-settings-btn'),
@@ -212,6 +222,7 @@ const state = {
         enableGrounding: false, //ネット検索設定 (デフォルトfalse)
         enableSwipeNavigation: true,
         debugVirtualSend: false, // デバッグ用仮想送信設定 (デフォルトfalse)
+        debugVirtualResponse: '', // デバッグ用仮想送信の返答 (デフォルト空文字列)
         // コンテキスト圧縮設定
         compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
         keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
@@ -458,6 +469,8 @@ const dbUtils = {
                             state.settings[key] = loadedValue === true;
                         } else if (key === 'debugVirtualSend') { // デバッグ用仮想送信設定
                             state.settings[key] = loadedValue === true;
+                        } else if (key === 'debugVirtualResponse') { // デバッグ用仮想送信の返答
+                            state.settings[key] = typeof loadedValue === 'string' ? loadedValue : '';
                         } else if (key === 'compressionMode') { // 圧縮モード設定
                             state.settings[key] = loadedValue === true;
                         } else if (key === 'darkMode' || key === 'streamingOutput' || key === 'pseudoStreaming' || key === 'enterToSend' || key === 'concatDummyModel') {
@@ -571,6 +584,7 @@ const dbUtils = {
                 }
 
                 const chatIdForOperation = existingChatData ? existingChatData.id : state.currentChatId;
+                
                 const chatData = {
                     messages: messagesToSave,
                     systemPrompt: state.currentSystemPrompt, // システムプロンプトを保存
@@ -581,6 +595,8 @@ const dbUtils = {
                     ...(state.compressedSummary && { compressedSummary: state.compressedSummary }),
                     // 最後に送信したリクエスト内容を保存
                     ...(state.lastSentRequest && { lastSentRequest: state.lastSentRequest }),
+                    // レスポンス置換データを保存
+                    ...(state.responseReplacer && { responseReplacements: state.responseReplacer.getSaveData() }),
                 };
                 if (chatIdForOperation) { // IDがあれば更新なのでIDを付与
                     chatData.id = chatIdForOperation;
@@ -1427,6 +1443,7 @@ const uiUtils = {
         elements.enableGroundingToggle.checked = state.settings.enableGrounding; // ネット検索設定を適用
         elements.swipeNavigationToggle.checked = state.settings.enableSwipeNavigation;
         elements.debugVirtualSendToggle.checked = state.settings.debugVirtualSend; // デバッグ用仮想送信設定を適用
+        elements.debugVirtualResponseTextarea.value = state.settings.debugVirtualResponse || ''; // デバッグ用仮想送信の返答を適用
         // コンテキスト圧縮設定を適用
         elements.compressionPromptTextarea.value = state.settings.compressionPrompt || DEFAULT_COMPRESSION_PROMPT;
         elements.keepFirstMessagesInput.value = state.settings.keepFirstMessages ?? DEFAULT_KEEP_FIRST_MESSAGES;
@@ -1817,21 +1834,23 @@ const apiUtils = {
     async callGeminiApi(messagesForApi, generationConfig, systemInstruction) {
         // デバッグ用仮想送信が有効な場合、実際のAPI呼び出しをスキップ
         if (state.settings.debugVirtualSend) {
-            console.log("デバッグ用仮想送信モード: 実際のAPI呼び出しをスキップし、空の応答を返します");
+            const debugResponse = state.settings.debugVirtualResponse || " "; // 設定されたテキストまたは空文字列
+            console.log("デバッグ用仮想送信モード: 実際のAPI呼び出しをスキップし、設定された応答を返します");
+            console.log("返答内容:", debugResponse);
             
-            // 空の応答をシミュレートするためのResponseオブジェクトを作成
-            const emptyResponse = new Response(
+            // 設定された応答をシミュレートするためのResponseオブジェクトを作成
+            const virtualResponse = new Response(
                 JSON.stringify({
                     candidates: [{
                         content: {
-                            parts: [{ text: " " }]
+                            parts: [{ text: debugResponse }]
                         },
                         finishReason: "STOP"
                     }],
                     usageMetadata: {
                         promptTokenCount: 0,
-                        candidatesTokenCount: 1,
-                        totalTokenCount: 1
+                        candidatesTokenCount: debugResponse.length,
+                        totalTokenCount: debugResponse.length
                     }
                 }),
                 {
@@ -1841,7 +1860,7 @@ const apiUtils = {
                 }
             );
             
-            return emptyResponse;
+            return virtualResponse;
         }
         
         if (!state.settings.apiKey) {
@@ -2110,6 +2129,20 @@ const apiUtils = {
                         currentUsageMetadata = chunkJson.usageMetadata;
                     }
 
+                    // レスポンス置換を適用
+                    if (contentText !== null && state.responseReplacer && state.responseReplacer.replacements.length > 0) {
+                        let replacedContent = contentText;
+                        for (const replacement of state.responseReplacer.replacements) {
+                            try {
+                                const regex = new RegExp(replacement.pattern, 'g');
+                                replacedContent = replacedContent.replace(regex, replacement.replacement);
+                            } catch (error) {
+                                console.warn('レスポンス置換でエラー:', error, 'パターン:', replacement.pattern);
+                            }
+                        }
+                        contentText = replacedContent;
+                    }
+
                     if (contentText !== null || thoughtText !== null || currentGroundingMetadata || currentUsageMetadata) {
                         return {
                             type: 'chunk', // 通常のチャンクであることを示す
@@ -2231,12 +2264,18 @@ const appLogic = {
         // ナビゲーションボタン
         elements.gotoHistoryBtn.addEventListener('click', () => uiUtils.showScreen('history'));
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
-        elements.promptCheckBtn.addEventListener('click', () => {
-        // プロンプト確認画面に表示するデータを構築
+        elements.promptCheckBtn.addEventListener('click', async () => {
+			// プロンプト確認画面に表示するデータを構築
 			const promptData = buildPromptDataForCheck();
-        elements.promptContent.textContent = promptData;
+			        elements.promptContent.textContent = promptData;
+        // 圧縮状態を表示
+        this.updateCompressionStatusDisplay();
+        // レスポンス置換を読み込み（現在のチャットデータがない場合は空で初期化）
+        await this.loadResponseReplacementsFromChat();
+        // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
+        this.renderResponseReplacementsList();
         uiUtils.showScreen('prompt-check');
-    });
+		});
         
         // 圧縮破棄ボタン
         elements.clearCompressionBtn.addEventListener('click', async () => {
@@ -2414,6 +2453,14 @@ const appLogic = {
         // popstate イベントリスナー (戻るボタン/ジェスチャー対応)
         window.addEventListener('popstate', this.handlePopState.bind(this));
         console.log("popstate listener added.");
+
+        // タブボタンのイベントリスナー
+        elements.tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabName = button.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
         
         // ファイルアップロード関連のイベントリスナー
         elements.attachFileBtn.addEventListener('click', () => uiUtils.showFileUploadDialog());
@@ -2423,6 +2470,19 @@ const appLogic = {
             this.handleFileSelection(event.target.files);
             // 処理が終わったら input の値をリセットする
             event.target.value = null;
+        });
+
+        // タブUIイベントリスナー
+        elements.tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabName = button.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
+
+        // レスポンス置換管理イベントリスナー
+        elements.addResponseReplacementBtn.addEventListener('click', () => {
+            this.addResponseReplacement();
         });
         elements.confirmAttachBtn.addEventListener('click', () => this.confirmAttachment());
         elements.cancelAttachBtn.addEventListener('click', () => this.cancelAttachment());
@@ -2604,6 +2664,7 @@ const appLogic = {
     startNewChat() {
         state.currentChatId = null; // IDリセット
         state.currentMessages = []; // メッセージクリア
+        state.currentMessages.responseReplacements = []; // レスポンス置換を初期化
         state.currentSystemPrompt = state.settings.systemPrompt; // デフォルトのシステムプロンプトを適用
         state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
@@ -2684,6 +2745,9 @@ const appLogic = {
                 // 最後に送信したリクエスト内容を読み込み
                 state.lastSentRequest = chat.lastSentRequest || null;
                 state.pendingAttachments = []; // 保留中の添付ファイルをクリア
+                
+                // レスポンス置換データを読み込み
+                this.loadResponseReplacementsFromChat(chat);
                 uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
                 uiUtils.renderChatMessages(); // メッセージ表示更新 (正規化された isSelected を反映)
                 uiUtils.scrollToBottom(); // チャット切り替え時に最下部にスクロール
@@ -3233,6 +3297,20 @@ const appLogic = {
                     modelThoughtSummaryContent = modelThoughtSummaryContent.trim();
                     rawContentFromApi = rawContentFromApi.trim();
 
+                    // レスポンス置換を適用
+                    if (rawContentFromApi && state.responseReplacer && state.responseReplacer.replacements.length > 0) {
+                        let replacedContent = rawContentFromApi;
+                        for (const replacement of state.responseReplacer.replacements) {
+                            try {
+                                const regex = new RegExp(replacement.pattern, 'g');
+                                replacedContent = replacedContent.replace(regex, replacement.replacement);
+                            } catch (error) {
+                                console.warn('レスポンス置換でエラー:', error, 'パターン:', replacement.pattern);
+                            }
+                        }
+                        rawContentFromApi = replacedContent;
+                    }
+
                     currentGroundingMetadata = candidate.groundingMetadata || null;
                     finalUsageMetadataFromStream = data.usageMetadata || null;
                     if (candidate.finishReason && candidate.finishReason !== "STOP" && candidate.finishReason !== "MAX_TOKENS") {
@@ -3635,6 +3713,7 @@ const appLogic = {
                 enableGrounding: elements.enableGroundingToggle.checked, // ネット検索設定を取得
                 enableSwipeNavigation: elements.swipeNavigationToggle.checked,//スワイプナビゲーション設定を取得
                 debugVirtualSend: elements.debugVirtualSendToggle.checked, // デバッグ用仮想送信設定を取得
+                debugVirtualResponse: elements.debugVirtualResponseTextarea.value.trim(), // デバッグ用仮想送信の返答を取得
                 // コンテキスト圧縮設定を取得
                 compressionMode: state.isCompressionMode,
                 compressionPrompt: elements.compressionPromptTextarea.value.trim(),
@@ -3770,6 +3849,7 @@ const appLogic = {
                     hideSystemPromptInChat: false, // SP非表示もリセット
                     enableSwipeNavigation: true, // スワイプナビゲーションのデフォルト値
                     debugVirtualSend: false, // デバッグ用仮想送信のデフォルト値
+                    debugVirtualResponse: '', // デバッグ用仮想送信の返答のデフォルト値
                     // コンテキスト圧縮設定のデフォルト値
                     compressionMode: true,
                     compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
@@ -4521,4 +4601,311 @@ const appLogic = {
         uiUtils.updateAttachmentBadgeVisibility();
     },
 
+    // --- レスポンス置換管理機能 ---
+    
+    // レスポンス置換をチャットデータから読み込み
+    async loadResponseReplacementsFromChat(chatData = null) {
+        if (chatData && chatData.responseReplacements) {
+            // 指定されたチャットデータから読み込み
+            state.responseReplacer = new ResponseReplacer(chatData.responseReplacements);
+        } else if (state.currentChatId) {
+            // 現在のチャットデータから読み込み
+            try {
+                const currentChat = await dbUtils.getChat(state.currentChatId);
+                if (currentChat && currentChat.responseReplacements) {
+                    state.responseReplacer = new ResponseReplacer(currentChat.responseReplacements);
+                } else {
+                    state.responseReplacer = new ResponseReplacer();
+                }
+            } catch (error) {
+                console.error('現在のチャットデータの読み込みエラー:', error);
+                state.responseReplacer = new ResponseReplacer();
+            }
+        } else {
+            // 新規チャットの場合
+            state.responseReplacer = new ResponseReplacer();
+        }
+    },
+
+    // タブUI制御
+    switchTab(tabName) {
+        // タブボタンのアクティブ状態を切り替え
+        elements.tabButtons.forEach(button => {
+            if (button.dataset.tab === tabName) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+
+        // タブコンテンツの表示を切り替え
+        if (tabName === 'prompt') {
+            elements.promptTab.classList.add('active');
+            elements.compressionStatusTab.classList.remove('active');
+            elements.responseReplacementsTab.classList.remove('active');
+        } else if (tabName === 'compression-status') {
+            elements.promptTab.classList.remove('active');
+            elements.compressionStatusTab.classList.add('active');
+            elements.responseReplacementsTab.classList.remove('active');
+            this.updateCompressionStatusDisplay();
+        } else if (tabName === 'response-replacements') {
+            elements.promptTab.classList.remove('active');
+            elements.compressionStatusTab.classList.remove('active');
+            elements.responseReplacementsTab.classList.add('active');
+            this.renderResponseReplacementsList();
+        }
+    },
+
+    // レスポンス置換リストの表示
+    renderResponseReplacementsList() {
+        const list = elements.responseReplacementsList;
+        list.innerHTML = '';
+
+        if (state.responseReplacer && state.responseReplacer.replacements.length > 0) {
+            state.responseReplacer.replacements.forEach((replacement, index) => {
+                const item = this.createResponseReplacementItem(replacement, index);
+                list.appendChild(item);
+            });
+        }
+    },
+
+    // レスポンス置換アイテムの作成
+    createResponseReplacementItem(replacement, index) {
+        const item = document.createElement('div');
+        item.className = 'response-replacement-item';
+        item.dataset.index = index;
+
+        item.innerHTML = `
+            <div class="response-replacement-form">
+                <div class="response-replacement-form-row">
+                    <input type="text" value="${replacement.pattern}" class="replacement-input" disabled autocomplete="off">
+                    <span class="replacement-arrow">➡️</span>
+                    <input type="text" value="${replacement.replacement}" class="replacement-input" disabled autocomplete="off">
+                </div>
+                <div class="response-replacement-form-actions">
+                    <button class="move-up-btn" title="上に移動">🔼</button>
+                    <button class="move-down-btn" title="下に移動">🔽</button>
+                    <button class="edit-btn" title="編集">編集</button>
+                    <button class="delete-btn" title="削除">削除</button>
+                </div>
+            </div>
+        `;
+
+        // イベントリスナーを設定
+        const moveUpBtn = item.querySelector('.move-up-btn');
+        const moveDownBtn = item.querySelector('.move-down-btn');
+        const editBtn = item.querySelector('.edit-btn');
+        const deleteBtn = item.querySelector('.delete-btn');
+        
+        moveUpBtn.onclick = () => this.moveResponseReplacement(index, 'up');
+        moveDownBtn.onclick = () => this.moveResponseReplacement(index, 'down');
+        editBtn.onclick = () => this.editResponseReplacement(index);
+        deleteBtn.onclick = () => this.deleteResponseReplacement(index);
+
+        return item;
+    },
+
+    // レスポンス置換の追加
+    addResponseReplacement() {
+        const newReplacement = {
+            pattern: '',
+            replacement: ''
+        };
+
+        const item = this.createResponseReplacementEditForm(newReplacement, -1);
+        elements.responseReplacementsList.appendChild(item);
+    },
+
+    // レスポンス置換の編集フォーム作成
+    createResponseReplacementEditForm(replacement, index) {
+        const item = document.createElement('div');
+        item.className = 'response-replacement-item';
+        item.dataset.index = index;
+
+        item.innerHTML = `
+            <div class="response-replacement-form">
+                <div class="response-replacement-form-row">
+                    <input type="text" id="replacement-pattern-${index}" value="${replacement.pattern || ''}" placeholder="検索パターン (正規表現)" class="replacement-input" autocomplete="off">
+                    <span class="replacement-arrow">➡️</span>
+                    <input type="text" id="replacement-replacement-${index}" value="${replacement.replacement || ''}" placeholder="置換テキスト" class="replacement-input" autocomplete="off">
+                </div>
+                <div class="response-replacement-form-actions">
+                    <button class="save-btn" title="保存">保存</button>
+                    <button class="cancel-btn" title="キャンセル">キャンセル</button>
+                </div>
+            </div>
+        `;
+
+        // イベントリスナーを設定
+        const saveBtn = item.querySelector('.save-btn');
+        const cancelBtn = item.querySelector('.cancel-btn');
+        
+        saveBtn.onclick = () => this.saveResponseReplacement(index);
+        cancelBtn.onclick = () => this.cancelResponseReplacementEdit(index);
+
+        return item;
+    },
+
+    // レスポンス置換の編集
+    editResponseReplacement(index) {
+        const replacement = state.responseReplacer.replacements[index];
+        if (!replacement) return;
+
+        const list = elements.responseReplacementsList;
+        const existingItem = list.querySelector(`[data-index="${index}"]`);
+        if (existingItem) {
+            const editForm = this.createResponseReplacementEditForm(replacement, index);
+            existingItem.replaceWith(editForm);
+        }
+    },
+
+    // レスポンス置換の保存
+    saveResponseReplacement(index) {
+        const patternInput = document.getElementById(`replacement-pattern-${index}`);
+        const replacementInput = document.getElementById(`replacement-replacement-${index}`);
+
+        if (!patternInput || !replacementInput) return;
+
+        const pattern = patternInput.value.trim();
+        const replacement = replacementInput.value;
+
+        if (!pattern) {
+            this.showCustomAlert('検索パターンを入力してください');
+            return;
+        }
+
+        // 正規表現の妥当性チェック
+        try {
+            new RegExp(pattern);
+        } catch (e) {
+            this.showCustomAlert('無効な正規表現です');
+            return;
+        }
+
+        const newReplacement = { pattern, replacement };
+
+        if (index === -1) {
+            // 新規追加
+            state.responseReplacer.addReplacement(pattern, replacement);
+        } else {
+            // 編集
+            state.responseReplacer.updateReplacement(index, pattern, replacement);
+        }
+
+        // チャットを保存してレスポンス置換データを永続化
+        dbUtils.saveChat().catch(error => console.error('レスポンス置換保存エラー:', error));
+        this.renderResponseReplacementsList();
+    },
+
+    // レスポンス置換の削除
+    deleteResponseReplacement(index) {
+        this.showCustomConfirm('このレスポンス置換を削除しますか？').then(confirmed => {
+            if (confirmed) {
+                state.responseReplacer.replacements.splice(index, 1);
+                // チャットを保存してレスポンス置換データを永続化
+                dbUtils.saveChat().catch(error => console.error('レスポンス置換削除保存エラー:', error));
+                this.renderResponseReplacementsList();
+            }
+        });
+    },
+
+    // レスポンス置換編集のキャンセル
+    cancelResponseReplacementEdit(index) {
+        if (index === -1) {
+            // 新規追加のキャンセル
+            const newItem = elements.responseReplacementsList.querySelector('[data-index="-1"]');
+            if (newItem) {
+                newItem.remove();
+            }
+        } else {
+            // 編集のキャンセル
+            this.renderResponseReplacementsList();
+        }
+    },
+
+    // レスポンス置換の移動
+    moveResponseReplacement(index, direction) {
+        const replacements = state.responseReplacer.replacements;
+        
+        if (direction === 'up' && index > 0) {
+            // 上に移動
+            [replacements[index], replacements[index - 1]] = [replacements[index - 1], replacements[index]];
+        } else if (direction === 'down' && index < replacements.length - 1) {
+            // 下に移動
+            [replacements[index], replacements[index + 1]] = [replacements[index + 1], replacements[index]];
+        } else {
+            // 移動できない場合は何もしない
+            return;
+        }
+        
+        // チャットを保存してレスポンス置換データを永続化
+        dbUtils.saveChat().catch(error => console.error('レスポンス置換移動保存エラー:', error));
+        this.renderResponseReplacementsList();
+    },
+
+    // 圧縮状態表示を更新
+    updateCompressionStatusDisplay() {
+        const compressionStatusContent = document.getElementById('compression-status-content');
+        if (!compressionStatusContent) return;
+
+        if (!state.compressedSummary) {
+            // 圧縮データがない場合
+            compressionStatusContent.innerHTML = `
+                <div class="compression-status-info">
+                    <p>圧縮データがありません</p>
+                </div>
+            `;
+            return;
+        }
+
+        // 圧縮データがある場合、詳細を表示
+        const summary = state.compressedSummary;
+        const timestamp = new Date(summary.timestamp).toLocaleString('ja-JP');
+        
+        // 圧縮範囲のメッセージ数を計算
+        const compressedMessageCount = summary.endIndex - summary.startIndex + 1;
+        
+        // 圧縮率を計算
+        const compressionRatio = summary.originalTokens > 0 
+            ? ((summary.originalTokens - summary.compressedTokens) / summary.originalTokens * 100).toFixed(1)
+            : '0.0';
+
+        compressionStatusContent.innerHTML = `
+            <div class="compression-status-grid">
+                    <div class="compression-status-item">
+                        <div class="compression-status-item-label">圧縮範囲</div>
+                        <div class="compression-status-item-value">${summary.startIndex + 1} ～ ${summary.endIndex + 1}</div>
+                    </div>
+                    <div class="compression-status-item">
+                        <div class="compression-status-item-label">圧縮メッセージ数</div>
+                        <div class="compression-status-item-value">約 ${compressedMessageCount} 件</div>
+                    </div>
+                    <div class="compression-status-item">
+                        <div class="compression-status-item-label">圧縮率</div>
+                        <div class="compression-status-item-value">${compressionRatio}%</div>
+                    </div>
+                    <div class="compression-status-item">
+                        <div class="compression-status-item-label">圧縮前トークン数</div>
+                        <div class="compression-status-item-value">${summary.originalTokens.toLocaleString()} tokens</div>
+                    </div>
+                    <div class="compression-status-item">
+                        <div class="compression-status-item-label">圧縮後トークン数</div>
+                        <div class="compression-status-item-value">${summary.compressedTokens.toLocaleString()} tokens</div>
+                    </div>
+                    <div class="compression-status-item">
+                        <div class="compression-status-item-label">節約トークン数</div>
+                        <div class="compression-status-item-value">${(summary.originalTokens - summary.compressedTokens).toLocaleString()} tokens</div>
+                    </div>
+                </div>
+                
+                <div class="compression-status-summary">
+                    <div class="compression-status-summary-label">圧縮サマリー</div>
+                    <div class="compression-status-summary-content">${summary.summary}</div>
+                </div>
+        `;
+    }
+
 }; // appLogic終了
+
+// ResponseReplacerをグローバルスコープで利用可能にする
+window.ResponseReplacer = ResponseReplacer;

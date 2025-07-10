@@ -59,7 +59,7 @@ const tokenUtils = {
         
         const originalTokens = this.calculateOriginalTokens(state.currentMessages);
         const originalK = Math.round(originalTokens / 1000);
-        return `${compressionStatus} Total ${totalTokens.toLocaleString('en-US')} Tokens (Original: ~${originalK}k)`;
+        return `${compressionStatus} (Total without compression: ~${originalK}k tokens)`;
     },
 
     // トークン表示を更新
@@ -398,16 +398,16 @@ const compressionUtils = {
     }
 };
 
-// スクロール機能の実装
+    // スクロール機能の実装
 const scrollUtils = {
     // チャットコンテナの最上部へスクロール
     scrollToTop() {
-        uiUtils.scrollToTop();
+        appLogic.scrollToTop();
     },
 
     // チャットコンテナの最下部へスクロール
     scrollToBottom() {
-        uiUtils.scrollToBottom();
+        appLogic.scrollToBottom();
     }
 };
 
