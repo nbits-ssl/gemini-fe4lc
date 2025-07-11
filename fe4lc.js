@@ -402,12 +402,12 @@ const compressionUtils = {
 const scrollUtils = {
     // チャットコンテナの最上部へスクロール
     scrollToTop() {
-        appLogic.scrollToTop();
+        uiUtils.scrollToTop();
     },
 
     // チャットコンテナの最下部へスクロール
     scrollToBottom() {
-        appLogic.scrollToBottom();
+        uiUtils.scrollToBottom();
     }
 };
 
