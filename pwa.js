@@ -4770,7 +4770,7 @@ const appLogic = {
         const replacement = replacementInput.value;
 
         if (!pattern) {
-            this.showCustomAlert('検索パターンを入力してください');
+            uiUtils.showCustomAlert('検索パターンを入力してください');
             return;
         }
 
@@ -4778,7 +4778,7 @@ const appLogic = {
         try {
             new RegExp(pattern);
         } catch (e) {
-            this.showCustomAlert('無効な正規表現です');
+            uiUtils.showCustomAlert('無効な正規表現です');
             return;
         }
 
@@ -4799,7 +4799,7 @@ const appLogic = {
 
     // レスポンス置換の削除
     deleteResponseReplacement(index) {
-        this.showCustomConfirm('このレスポンス置換を削除しますか？').then(confirmed => {
+        uiUtils.showCustomConfirm('このレスポンス置換を削除しますか？').then(confirmed => {
             if (confirmed) {
                 state.responseReplacer.replacements.splice(index, 1);
                 // チャットを保存してレスポンス置換データを永続化

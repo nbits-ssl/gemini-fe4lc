@@ -309,10 +309,6 @@ const compressionUtils = {
                         }
                     });
 
-                    // 圧縮完了メッセージを表示（一時的な表示のみ）
-                    uiUtils.appendMessage('assistant', COMPRESSION_COMPLETION_MESSAGE(extracted.compressedCount), -1, false, null, null, true);
-                    uiUtils.scrollToBottom();
-
                     // 圧縮結果をstateに保存
                     const { middleMessages } = extracted;
                     let compressedStartIndex = -1;
@@ -369,6 +365,10 @@ const compressionUtils = {
                     // 圧縮結果をログに表示
                     console.log('=== 圧縮結果 ===');
                     console.log('state.compressedSummary:', state.compressedSummary);
+
+                    // 圧縮完了メッセージを表示（一時的な表示のみ）
+                    uiUtils.appendMessage('assistant', COMPRESSION_COMPLETION_MESSAGE(extracted.compressedCount), -1, false, null, null, true);
+                    uiUtils.scrollToBottom();
                     
                     // 圧縮データをIndexedDBに保存
                     try {
