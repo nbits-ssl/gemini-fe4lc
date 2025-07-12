@@ -1094,24 +1094,37 @@ const uiUtils = {
             const actionsDiv = document.createElement('div');
             actionsDiv.classList.add('message-actions');
             
-            // 編集ボタン
-            const editButton = document.createElement('button');
-            editButton.textContent = '編集'; editButton.title = 'メッセージを編集'; editButton.classList.add('js-edit-btn');
-            editButton.onclick = () => appLogic.startEditMessage(index, messageDiv);
-            actionsDiv.appendChild(editButton);
+            // 一時的なメッセージ（skipStateUpdate = true）の場合は削除ボタンのみ表示
+            if (skipStateUpdate) {
+                // 削除ボタン（表示のみ削除）
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '削除'; deleteButton.title = 'このメッセージを非表示にする'; deleteButton.classList.add('js-delete-btn');
+                deleteButton.onclick = () => {
+                    // 表示のみ削除（stateからは削除しない）
+                    messageDiv.remove();
+                };
+                actionsDiv.appendChild(deleteButton);
+            } else {
+                // 通常のメッセージの場合は全てのボタンを表示
+                // 編集ボタン
+                const editButton = document.createElement('button');
+                editButton.textContent = '編集'; editButton.title = 'メッセージを編集'; editButton.classList.add('js-edit-btn');
+                editButton.onclick = () => appLogic.startEditMessage(index, messageDiv);
+                actionsDiv.appendChild(editButton);
 
-            // 削除ボタン (メッセージペア全体削除)
-            const deleteButton = document.createElement('button');
-            deleteButton.textContent = '削除'; deleteButton.title = 'この会話ターンを削除'; deleteButton.classList.add('js-delete-btn');
-            deleteButton.onclick = () => appLogic.deleteMessage(index); // 既存の全体削除関数
-            actionsDiv.appendChild(deleteButton);
+                // 削除ボタン (メッセージペア全体削除)
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '削除'; deleteButton.title = 'この会話ターンを削除'; deleteButton.classList.add('js-delete-btn');
+                deleteButton.onclick = () => appLogic.deleteMessage(index); // 既存の全体削除関数
+                actionsDiv.appendChild(deleteButton);
 
-            // ユーザーメッセージにはリトライボタンも追加
-            if (role === 'user') {
-                const retryButton = document.createElement('button');
-                retryButton.textContent = 'リトライ'; retryButton.title = 'このメッセージから再生成'; retryButton.classList.add('js-retry-btn');
-                retryButton.onclick = () => appLogic.retryFromMessage(index);
-                actionsDiv.appendChild(retryButton);
+                // ユーザーメッセージにはリトライボタンも追加
+                if (role === 'user') {
+                    const retryButton = document.createElement('button');
+                    retryButton.textContent = 'リトライ'; retryButton.title = 'このメッセージから再生成'; retryButton.classList.add('js-retry-btn');
+                    retryButton.onclick = () => appLogic.retryFromMessage(index);
+                    actionsDiv.appendChild(retryButton);
+                }
             }
             
             // const messageData = state.currentMessages[index]; // 上で取得済みなので再利用
@@ -4104,7 +4117,11 @@ const appLogic = {
             return;
         }
         if (index < 0 || index >= state.currentMessages.length) {
-                console.error("削除対象のインデックスが無効:", index);
+                if (index === -1) {
+                    console.log("一時的なメッセージ（インデックス-1）の削除は表示のみで処理されます");
+                } else {
+                    console.error("削除対象のインデックスが無効:", index);
+                }
                 return;
         }
 
