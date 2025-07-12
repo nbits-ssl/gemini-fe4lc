@@ -1562,7 +1562,7 @@ const uiUtils = {
 
         // fromPopStateがfalseの場合のみ履歴操作を行う (UI操作時)
         if (!fromPopState) {
-            if (screenName === 'history' || screenName === 'settings' || screenName === 'prompt-check') {
+            if (screenName === 'history' || screenName === 'settings' || screenName === 'chat-info') {
                 // 履歴/設定/プロンプト確認画面への遷移時は履歴を追加
                 history.pushState({ screen: screenName }, '', `#${screenName}`);
                 console.log(`Pushed state: ${screenName}`);
@@ -1603,7 +1603,7 @@ const uiUtils = {
             elements.promptCheckScreen.style.transform = 'translateX(-100%)';
             elements.settingsScreen.style.transform = 'translateX(200%)';
             this.renderHistoryList();
-        } else if (screenName === 'prompt-check') {
+        } else if (screenName === 'chat-info') {
             activeScreen = elements.promptCheckScreen;
             elements.chatScreen.style.transform = 'translateX(200%)';
             elements.historyScreen.style.transform = 'translateX(100%)';
@@ -2287,7 +2287,7 @@ const appLogic = {
         await this.loadResponseReplacementsFromChat();
         // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
         this.renderResponseReplacementsList();
-        uiUtils.showScreen('prompt-check');
+        uiUtils.showScreen('chat-info');
 		});
         
         // 圧縮破棄ボタン
