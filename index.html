@@ -102,6 +102,7 @@
                 <div class="tab-navigation">
                     <button class="tab-button active" data-tab="prompt">最終プロンプト</button>
                     <button class="tab-button" data-tab="compression-status">圧縮情報</button>
+                    <button class="tab-button" data-tab="context-notes">ノート設定</button>
                     <button class="tab-button" data-tab="response-replacements">レスポンス置換</button>
                 </div>
                 
@@ -139,6 +140,30 @@
                             <p>※ 置換テキストを空欄のままにしておくと、マッチした文字列をそのまま削除します</p>
                             <p>※ 各チャットごとに設定が保存されます</p>
                             <p>※ <a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Guide/Regular_Expressions" target="_blank" rel="noopener">正規表現リファレンス (MDN)</a></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- コンテキストノートタブ -->
+                <div id="context-notes-tab" class="tab-content">
+                    <div class="response-replacements-container">
+                        <div class="response-replacements-header">
+                            <h3>コンテキストノート設定</h3>
+                            <button id="add-context-note-btn" class="action-button">追加</button>
+                        </div>
+                        
+                        <div id="context-notes-list" class="response-replacements-list">
+                            <!-- コンテキストノートのリストがここに動的に追加される -->
+                        </div>
+                        
+                        <div class="response-replacements-info">
+                            <p>※ 「内容」の1行目は「タイトル」と合わせて、そのノートのサマリーとして扱われます</p>
+                            <p>※ タイプ「キーワード」はキーワードマッチ、「モーメント」は記憶や想い出として、ランダム選出されます</p>
+                            <p>※ キーワードの方はキャラクター、アイテム、特別なイベントなどの物事・事象に適しています</p>
+                            <p>※ 「モーメント」はセッション履歴などのこれまでの記録に適しています</p>
+                            <p>※ キーワードは「,」で区切って複数可能です</p>
+                            <p>※ キーワードが空欄の場合は、内部的にタイトルがキーワードとして扱われます</p>
+                            <p>※ 各チャットごとに設定が保存されます</p>
                         </div>
                     </div>
                 </div>
@@ -302,6 +327,41 @@
                         ※ 長い会話でトークン数が多くなった際に、中間部分を要約して圧縮します。<br>
                         ※ 基本設定と同じモデルを使用して要約を行います。<br>
                         ※ 最初と最後の指定した数のメッセージは保持され、中間部分のみ要約されます。
+                    </p>
+                </div>
+                <div class="settings-group">
+                    <h3>コンテキストノート</h3>
+                    <div class="param-grid">
+                        <div>
+                            <label for="context-note-random-frequency">ランダム選択の確率:</label>
+                            <input type="number" id="context-note-random-frequency" step="0.1" min="0" max="1" placeholder="0.3" aria-label="ランダム選択の確率">
+                        </div>
+                        <div>
+                            <label for="context-note-random-count">ランダム選択するノートの数:</label>
+                            <input type="number" id="context-note-random-count" step="1" min="1" placeholder="1" aria-label="ランダム選択するノートの数">
+                        </div>
+                    </div>
+                    <div class="param-grid">
+                        <div>
+                            <label for="context-note-message-count">対象メッセージ数・最新からN件:</label>
+                            <input type="number" id="context-note-message-count" step="1" min="1" placeholder="6" aria-label="対象メッセージ数">
+                        </div>
+                        <div>
+                            <label for="context-note-max-chars">最大文字数:</label>
+                            <input type="number" id="context-note-max-chars" step="100" min="100" placeholder="2000" aria-label="最大文字数">
+                        </div>
+                    </div>
+                    <div class="param-grid">
+                        <div>
+                            <label for="context-note-insertion-priority">マッチング結果の挿入優先度 (1-10):</label>
+                            <input type="number" id="context-note-insertion-priority" step="1" min="1" max="10" placeholder="1" aria-label="挿入優先度">
+                        </div>
+                    </div>
+                    <p style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
+                        ※ ランダム選択の確率: 0.0-1.0の範囲で、値が大きいほどランダム選択が頻繁に実行されます。<br>
+                        ※ 対象メッセージ数: 最新のN件のメッセージをキーワードマッチングの対象とします。<br>
+                        ※ 最大文字数: マッチング対象の文字列がこの文字数を超える場合、最新部分のみを使用します。<br>
+                        ※ 挿入優先度: 1=最新ユーザーの直上、2=2番目のユーザーの下、3=2番目のユーザーの上...の順で挿入位置を決定します。
                     </p>
                 </div>
                 <div class="settings-group">
@@ -474,6 +534,7 @@
     </dialog>
 
     <script src="script/ResponseReplacer.js"></script>
+    <script src="script/ContextNote.js"></script>
     <script src="pwa.js"></script>
     <script src="fe4lc.js"></script>
     <script>

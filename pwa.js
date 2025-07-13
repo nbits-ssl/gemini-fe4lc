@@ -1,8 +1,6 @@
-// ResponseReplacerは通常のスクリプトとして読み込まれる
-
 // --- 定数 ---
 const DB_NAME = 'GeminiPWA_DB';
-const DB_VERSION = 8; // スキーマ変更なしのため据え置き
+const DB_VERSION = 9; // ContextNote機能追加のためスキーマ更新
 const SETTINGS_STORE = 'settings';
 const CHATS_STORE = 'chats';
 const CHAT_UPDATEDAT_INDEX = 'updatedAtIndex';
@@ -31,6 +29,13 @@ const ZOOM_THRESHOLD = 1.01; // ズーム状態と判定するスケールの閾
 const OMISSION_TEXT = '...[省略]...'; // 省略表示用テキスト
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 最大ファイルサイズ (例: 10MB)
 const MAX_TOTAL_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 1メッセージあたりの合計添付ファイルサイズ上限 (例: 50MB) - API制限も考慮
+
+// ContextNote設定のデフォルト値
+const DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY = 0.3; // ランダム選択の確率（0.0-1.0）
+const DEFAULT_CONTEXT_NOTE_RANDOM_COUNT = 1; // ランダム選択するノートの数
+const DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT = 6; // 対象メッセージ数（user+model合わせて）
+const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 2000; // 対象文字列の最大文字数
+const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 1; // マッチング結果の挿入優先度（1-10）
 
 // 添付を確定する処理
 const extensionToMimeTypeMap = {
@@ -133,6 +138,12 @@ const elements = {
     compressionPromptTextarea: document.getElementById('compression-prompt'),
     keepFirstMessagesInput: document.getElementById('keep-first-messages'),
     keepLastMessagesInput: document.getElementById('keep-last-messages'),
+    // ContextNote設定要素
+    contextNoteRandomFrequencyInput: document.getElementById('context-note-random-frequency'),
+    contextNoteRandomCountInput: document.getElementById('context-note-random-count'),
+    contextNoteMessageCountInput: document.getElementById('context-note-message-count'),
+    contextNoteMaxCharsInput: document.getElementById('context-note-max-chars'),
+    contextNoteInsertionPriorityInput: document.getElementById('context-note-insertion-priority'),
     appVersionSpan: document.getElementById('app-version'),
     // 背景画像設定要素
     backgroundImageInput: document.getElementById('background-image-input'),
@@ -147,6 +158,10 @@ const elements = {
     responseReplacementsTab: document.getElementById('response-replacements-tab'),
     addResponseReplacementBtn: document.getElementById('add-response-replacement-btn'),
     responseReplacementsList: document.getElementById('response-replacements-list'),
+    // ContextNote関連要素
+    contextNotesTab: document.getElementById('context-notes-tab'),
+    addContextNoteBtn: document.getElementById('add-context-note-btn'),
+    contextNotesList: document.getElementById('context-notes-list'),
     // ボタン
     gotoHistoryBtn: document.getElementById('goto-history-btn'),
     gotoSettingsBtn: document.getElementById('goto-settings-btn'),
@@ -228,6 +243,12 @@ const state = {
         keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
         keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
         compressionPromptTokenCount: null, // 圧縮プロンプトのトークン数（キャッシュ用）
+        // ContextNote設定
+        contextNoteRandomFrequency: DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY, // ランダム選択の確率（0.0-1.0）
+        contextNoteRandomCount: DEFAULT_CONTEXT_NOTE_RANDOM_COUNT, // ランダム選択するノートの数
+        contextNoteMessageCount: DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT, // ContextNote対象メッセージ数（user+model合わせて）
+        contextNoteMaxChars: DEFAULT_CONTEXT_NOTE_MAX_CHARS, // ContextNote対象文字列の最大文字数
+        contextNoteInsertionPriority: DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY, // マッチング結果の挿入優先度（1-10）
     },
     backgroundImageUrl: null, // 生成されたオブジェクトURL (DBには保存しない)
     isSending: false,
@@ -250,6 +271,8 @@ const state = {
     // コンテキスト圧縮用状態
     isCompressionMode: true, // 圧縮モードの状態
     compressedSummary: null, // 1セッション1圧縮のデータ { messageIds: [], summary: string, timestamp: number }
+    // ContextNote機能用状態
+    contextNote: null, // ContextNoteインスタンス
 };
 
 function updateMessageMaxWidthVar() {
@@ -281,6 +304,57 @@ function filterMessagesForApi(messages) {
         if (msg.role === 'model') return !msg.isCascaded || (msg.isCascaded && msg.isSelected);
         return false;
     });
+}
+
+// ContextNote挿入位置を計算する関数
+function calculateInsertionIndex(priority, baseMessages) {
+    // priority: 1-10の値
+    // baseMessages: 現在のメッセージ配列
+    
+    if (priority <= 0 || priority > 10) {
+        return baseMessages.length; // デフォルトは最後に追加
+    }
+    
+    // 優先度に基づいて挿入位置を計算
+    // 1=最新ユーザーの直上、2=2番目のユーザーの下、3=2番目のユーザーの上...
+    const userMessageIndices = [];
+    for (let i = 0; i < baseMessages.length; i++) {
+        if (baseMessages[i] && baseMessages[i].role === 'user') {
+            userMessageIndices.push(i);
+        }
+    }
+    
+    if (userMessageIndices.length === 0) {
+        return baseMessages.length; // ユーザーメッセージがない場合は最後に追加
+    }
+    
+    // 優先度に基づいて挿入位置を決定
+    if (priority === 1) {
+        // 最新ユーザーメッセージの直上
+        return userMessageIndices[userMessageIndices.length - 1];
+    } else if (priority === 2) {
+        // 2番目のユーザーメッセージの下
+        if (userMessageIndices.length >= 2) {
+            return userMessageIndices[userMessageIndices.length - 2] + 1;
+        } else {
+            return baseMessages.length;
+        }
+    } else if (priority === 3) {
+        // 2番目のユーザーメッセージの上
+        if (userMessageIndices.length >= 2) {
+            return userMessageIndices[userMessageIndices.length - 2];
+        } else {
+            return baseMessages.length;
+        }
+    } else {
+        // 4-10の優先度は、ユーザーメッセージの位置に基づいて計算
+        const targetIndex = Math.min(priority - 1, userMessageIndices.length);
+        if (targetIndex < userMessageIndices.length) {
+            return userMessageIndices[userMessageIndices.length - targetIndex - 1];
+        } else {
+            return baseMessages.length;
+        }
+    }
 }
 
 // ファイルサイズを読みやすい形式にフォーマット
@@ -393,6 +467,14 @@ const dbUtils = {
                 if (event.oldVersion < 8) { // 以前のバージョンからのアップグレードの場合
                     console.log("DBアップグレード: 新しいメッセージフラグは動的に処理されます。");
                 }
+
+                // V9以降: ContextNote機能追加
+                // contextNotesフィールドはスキーマレスなIndexedDBの特性により、
+                // 保存時に自動的に追加される。読み込み時に存在しない場合は
+                // デフォルト値（空配列）として扱う。
+                if (event.oldVersion < 9) { // 以前のバージョンからのアップグレードの場合
+                    console.log("DBアップグレード: ContextNote機能が追加されました。");
+                }
             };
         });
     },
@@ -473,6 +555,41 @@ const dbUtils = {
                             state.settings[key] = typeof loadedValue === 'string' ? loadedValue : '';
                         } else if (key === 'compressionMode') { // 圧縮モード設定
                             state.settings[key] = loadedValue === true;
+                        } else if (key === 'contextNoteRandomFrequency') { // ContextNoteランダム選択確率
+                            const num = parseFloat(loadedValue);
+                            if (isNaN(num) || num < 0 || num > 1) {
+                                state.settings[key] = DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY; // デフォルト値
+                            } else {
+                                state.settings[key] = num;
+                            }
+                        } else if (key === 'contextNoteRandomCount') { // ContextNoteランダム選択数
+                            const num = parseInt(loadedValue, 10);
+                            if (isNaN(num) || num < 1) {
+                                state.settings[key] = DEFAULT_CONTEXT_NOTE_RANDOM_COUNT; // デフォルト値
+                            } else {
+                                state.settings[key] = num;
+                            }
+                        } else if (key === 'contextNoteMessageCount') { // ContextNote対象メッセージ数
+                            const num = parseInt(loadedValue, 10);
+                            if (isNaN(num) || num < 1) {
+                                state.settings[key] = DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT; // デフォルト値
+                            } else {
+                                state.settings[key] = num;
+                            }
+                        } else if (key === 'contextNoteMaxChars') { // ContextNote最大文字数
+                            const num = parseInt(loadedValue, 10);
+                            if (isNaN(num) || num < 100) {
+                                state.settings[key] = DEFAULT_CONTEXT_NOTE_MAX_CHARS; // デフォルト値
+                            } else {
+                                state.settings[key] = num;
+                            }
+                        } else if (key === 'contextNoteInsertionPriority') { // ContextNote挿入優先度
+                            const num = parseInt(loadedValue, 10);
+                            if (isNaN(num) || num < 1 || num > 10) {
+                                state.settings[key] = DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY; // デフォルト値
+                            } else {
+                                state.settings[key] = num;
+                            }
                         } else if (key === 'darkMode' || key === 'streamingOutput' || key === 'pseudoStreaming' || key === 'enterToSend' || key === 'concatDummyModel') {
                                 // その他の真偽値: 厳密にtrueかチェック
                                 state.settings[key] = loadedValue === true;
@@ -597,6 +714,8 @@ const dbUtils = {
                     ...(state.lastSentRequest && { lastSentRequest: state.lastSentRequest }),
                     // レスポンス置換データを保存
                     ...(state.responseReplacer && { responseReplacements: state.responseReplacer.getSaveData() }),
+					// ContextNoteデータを保存
+    			    ...(state.contextNote && { contextNotes: state.contextNote.getSaveData() }),
                 };
                 if (chatIdForOperation) { // IDがあれば更新なのでIDを付与
                     chatData.id = chatIdForOperation;
@@ -1461,6 +1580,12 @@ const uiUtils = {
         elements.compressionPromptTextarea.value = state.settings.compressionPrompt || DEFAULT_COMPRESSION_PROMPT;
         elements.keepFirstMessagesInput.value = state.settings.keepFirstMessages ?? DEFAULT_KEEP_FIRST_MESSAGES;
         elements.keepLastMessagesInput.value = state.settings.keepLastMessages ?? DEFAULT_KEEP_LAST_MESSAGES;
+        // ContextNote設定を適用
+        elements.contextNoteRandomFrequencyInput.value = state.settings.contextNoteRandomFrequency ?? DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY;
+        elements.contextNoteRandomCountInput.value = state.settings.contextNoteRandomCount ?? DEFAULT_CONTEXT_NOTE_RANDOM_COUNT;
+        elements.contextNoteMessageCountInput.value = state.settings.contextNoteMessageCount ?? DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT;
+        elements.contextNoteMaxCharsInput.value = state.settings.contextNoteMaxChars ?? DEFAULT_CONTEXT_NOTE_MAX_CHARS;
+        elements.contextNoteInsertionPriorityInput.value = state.settings.contextNoteInsertionPriority ?? DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY;
 
         // ユーザー指定モデルをコンボボックスに追加
         this.updateUserModelOptions();
@@ -2287,6 +2412,10 @@ const appLogic = {
         await this.loadResponseReplacementsFromChat();
         // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
         this.renderResponseReplacementsList();
+        // ContextNoteを読み込み（現在のチャットデータがない場合は空で初期化）
+        await this.loadContextNotesFromChat();
+        // ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
+        this.renderContextNotesList();
         uiUtils.showScreen('chat-info');
 		});
         
@@ -2497,6 +2626,11 @@ const appLogic = {
         elements.addResponseReplacementBtn.addEventListener('click', () => {
             this.addResponseReplacement();
         });
+        
+        // ContextNote管理イベントリスナー
+        elements.addContextNoteBtn.addEventListener('click', () => {
+            this.addContextNote();
+        });
         elements.confirmAttachBtn.addEventListener('click', () => this.confirmAttachment());
         elements.cancelAttachBtn.addEventListener('click', () => this.cancelAttachment());
         // ダイアログ自体を閉じた時もキャンセル扱い
@@ -2682,6 +2816,8 @@ const appLogic = {
         state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
+        // ContextNoteを初期化
+        state.contextNote = new ContextNote();
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
         uiUtils.renderChatMessages(); // 表示クリア
         uiUtils.updateChatTitle(); // タイトルを「新規チャット」に
@@ -2761,6 +2897,8 @@ const appLogic = {
                 
                 // レスポンス置換データを読み込み
                 this.loadResponseReplacementsFromChat(chat);
+                // ContextNoteデータを読み込み
+                this.loadContextNotesFromChat(chat);
                 uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
                 uiUtils.renderChatMessages(); // メッセージ表示更新 (正規化された isSelected を反映)
                 uiUtils.scrollToBottom(); // チャット切り替え時に最下部にスクロール
@@ -2858,7 +2996,9 @@ const appLogic = {
                     createdAt: Date.now(),
                     title: newTitle,
                     // 圧縮データもコピー
-                    ...(chat.compressedSummary && { compressedSummary: chat.compressedSummary })
+                    ...(chat.compressedSummary && { compressedSummary: chat.compressedSummary }),
+                            // ContextNoteデータもコピー
+        ...(chat.contextNotes && { contextNotes: [...chat.contextNotes] })
                 };
                 // 新しいチャットとしてDBに追加
                 const newChatId = await new Promise((resolve, reject) => {
@@ -3059,6 +3199,22 @@ const appLogic = {
             state.pendingAttachments = [];
             uiUtils.adjustTextareaHeight();
             uiUtils.scrollToBottom();
+
+            // ContextNote機能: 第1投後にサマリーを挿入（新規チャットの場合のみ）
+            if (state.contextNote && state.currentMessages.length === 1) {
+                const summaryString = state.contextNote.getAllNotesSummary();
+                if (summaryString) {
+                    const summaryMessage = {
+                        role: 'user',
+                        content: summaryString,
+                        timestamp: Date.now(),
+                        attachments: []
+                    };
+                    state.currentMessages.push(summaryMessage);
+                    uiUtils.appendMessage(summaryMessage.role, summaryMessage.content, state.currentMessages.length - 1, false, null, summaryMessage.attachments);
+                    uiUtils.scrollToBottom();
+                }
+            }
         } else {
             console.log("リトライ処理開始 (handleSend内):", state.currentMessages[userMessageIndex]);
             let siblingStartIndex = userMessageIndex + 1;
@@ -3128,6 +3284,42 @@ const appLogic = {
                 }
                 return { role: msg.role, parts: parts };
             });
+
+        // ContextNote機能: キーワードマッチングとランダム選択の結果を追加
+        if (state.contextNote) {
+            // 設定に基づいてContextNote対象のメッセージを取得
+            const targetMessages = state.currentMessages
+                .filter(msg => msg.role === 'user' || msg.role === 'model')
+                .slice(-state.settings.contextNoteMessageCount); // 最新のN件を取得
+            
+            // チャットのやり取りを文字列として取得
+            let chatText = targetMessages
+                .map(msg => msg.content)
+                .join('\n');
+            
+            // 最大文字数で切り詰め（最新の方から）
+            if (chatText.length > state.settings.contextNoteMaxChars) {
+                chatText = chatText.slice(-state.settings.contextNoteMaxChars);
+            }
+            
+            // マッチしたノートの文字列を取得（新しい設定を使用）
+            const matchedNotesString = state.contextNote.getMatchedNotesString(
+                chatText, 
+                state.settings.contextNoteRandomFrequency,
+                state.settings.contextNoteRandomCount
+            );
+            
+            if (matchedNotesString) {
+                // 挿入優先度に基づいて挿入位置を決定
+                const insertionIndex = calculateInsertionIndex(state.settings.contextNoteInsertionPriority, baseMessages);
+                
+                // マッチしたノートの内容を指定位置に挿入
+                baseMessages.splice(insertionIndex, 0, {
+                    role: 'user',
+                    parts: [{ text: matchedNotesString }]
+                });
+            }
+        }
 
         // 圧縮機能を使用してメッセージ配列を構築
         console.log('=== 圧縮機能デバッグ ===');
@@ -3732,6 +3924,12 @@ const appLogic = {
                 compressionPrompt: elements.compressionPromptTextarea.value.trim(),
                 keepFirstMessages: elements.keepFirstMessagesInput.value === '' ? DEFAULT_KEEP_FIRST_MESSAGES : parseInt(elements.keepFirstMessagesInput.value),
                 keepLastMessages: elements.keepLastMessagesInput.value === '' ? DEFAULT_KEEP_LAST_MESSAGES : parseInt(elements.keepLastMessagesInput.value),
+                // ContextNote設定を取得
+                contextNoteRandomFrequency: elements.contextNoteRandomFrequencyInput.value === '' ? DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY : parseFloat(elements.contextNoteRandomFrequencyInput.value),
+                contextNoteRandomCount: elements.contextNoteRandomCountInput.value === '' ? DEFAULT_CONTEXT_NOTE_RANDOM_COUNT : parseInt(elements.contextNoteRandomCountInput.value),
+                contextNoteMessageCount: elements.contextNoteMessageCountInput.value === '' ? DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT : parseInt(elements.contextNoteMessageCountInput.value),
+                contextNoteMaxChars: elements.contextNoteMaxCharsInput.value === '' ? DEFAULT_CONTEXT_NOTE_MAX_CHARS : parseInt(elements.contextNoteMaxCharsInput.value),
+                contextNoteInsertionPriority: elements.contextNoteInsertionPriorityInput.value === '' ? DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY : parseInt(elements.contextNoteInsertionPriorityInput.value),
             };
 
             // --- 数値入力のバリデーション ---
@@ -3765,6 +3963,22 @@ const appLogic = {
             }
             if (isNaN(newSettings.keepLastMessages) || newSettings.keepLastMessages < 0) {
                 newSettings.keepLastMessages = DEFAULT_KEEP_LAST_MESSAGES;
+            }
+            // ContextNote設定のバリデーション
+            if (isNaN(newSettings.contextNoteRandomFrequency) || newSettings.contextNoteRandomFrequency < 0 || newSettings.contextNoteRandomFrequency > 1) {
+                newSettings.contextNoteRandomFrequency = DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY;
+            }
+            if (isNaN(newSettings.contextNoteRandomCount) || newSettings.contextNoteRandomCount < 1) {
+                newSettings.contextNoteRandomCount = DEFAULT_CONTEXT_NOTE_RANDOM_COUNT;
+            }
+            if (isNaN(newSettings.contextNoteMessageCount) || newSettings.contextNoteMessageCount < 1) {
+                newSettings.contextNoteMessageCount = DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT;
+            }
+            if (isNaN(newSettings.contextNoteMaxChars) || newSettings.contextNoteMaxChars < 100) {
+                newSettings.contextNoteMaxChars = DEFAULT_CONTEXT_NOTE_MAX_CHARS;
+            }
+            if (isNaN(newSettings.contextNoteInsertionPriority) || newSettings.contextNoteInsertionPriority < 1 || newSettings.contextNoteInsertionPriority > 10) {
+                newSettings.contextNoteInsertionPriority = DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY;
             }
             // --- バリデーション終了 ---
 
@@ -3868,6 +4082,12 @@ const appLogic = {
                     compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
                     keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
                     keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
+                    // ContextNote設定のデフォルト値
+                    contextNoteRandomFrequency: DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY,
+                    contextNoteRandomCount: DEFAULT_CONTEXT_NOTE_RANDOM_COUNT,
+                    contextNoteMessageCount: DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT,
+                    contextNoteMaxChars: DEFAULT_CONTEXT_NOTE_MAX_CHARS,
+                    contextNoteInsertionPriority: DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY,
                 };
                 state.backgroundImageUrl = null;
 
@@ -4644,6 +4864,30 @@ const appLogic = {
         }
     },
 
+    // ContextNoteをチャットデータから読み込み
+    async loadContextNotesFromChat(chatData = null) {
+        if (chatData && chatData.contextNotes) {
+            // 指定されたチャットデータから読み込み
+            state.contextNote = new ContextNote(chatData.contextNotes);
+        } else if (state.currentChatId) {
+            // 現在のチャットデータから読み込み
+            try {
+                const currentChat = await dbUtils.getChat(state.currentChatId);
+                if (currentChat && currentChat.contextNotes) {
+                    state.contextNote = new ContextNote(currentChat.contextNotes);
+                } else {
+                    state.contextNote = new ContextNote();
+                }
+            } catch (error) {
+                console.error('現在のチャットデータの読み込みエラー:', error);
+                state.contextNote = new ContextNote();
+            }
+        } else {
+            // 新規チャットの場合
+            state.contextNote = new ContextNote();
+        }
+    },
+
     // タブUI制御
     switchTab(tabName) {
         // タブボタンのアクティブ状態を切り替え
@@ -4660,16 +4904,25 @@ const appLogic = {
             elements.promptTab.classList.add('active');
             elements.compressionStatusTab.classList.remove('active');
             elements.responseReplacementsTab.classList.remove('active');
+            elements.contextNotesTab.classList.remove('active');
         } else if (tabName === 'compression-status') {
             elements.promptTab.classList.remove('active');
             elements.compressionStatusTab.classList.add('active');
             elements.responseReplacementsTab.classList.remove('active');
+            elements.contextNotesTab.classList.remove('active');
             this.updateCompressionStatusDisplay();
         } else if (tabName === 'response-replacements') {
             elements.promptTab.classList.remove('active');
             elements.compressionStatusTab.classList.remove('active');
             elements.responseReplacementsTab.classList.add('active');
+            elements.contextNotesTab.classList.remove('active');
             this.renderResponseReplacementsList();
+        } else if (tabName === 'context-notes') {
+            elements.promptTab.classList.remove('active');
+            elements.compressionStatusTab.classList.remove('active');
+            elements.responseReplacementsTab.classList.remove('active');
+            elements.contextNotesTab.classList.add('active');
+            this.renderContextNotesList();
         }
     },
 
@@ -4860,6 +5113,211 @@ const appLogic = {
         this.renderResponseReplacementsList();
     },
 
+    // ContextNoteリストの表示
+    renderContextNotesList() {
+        const list = elements.contextNotesList;
+        list.innerHTML = '';
+
+        if (state.contextNote && state.contextNote.getAllNotes().length > 0) {
+            state.contextNote.getAllNotes().forEach((note, index) => {
+                const item = this.createContextNoteItem(note, index);
+                list.appendChild(item);
+            });
+        }
+    },
+
+    // ContextNoteアイテムの作成
+    createContextNoteItem(note, index) {
+        const item = document.createElement('div');
+        item.className = 'context-note-item';
+        item.dataset.index = index;
+
+        item.innerHTML = `
+            <div class="context-note-form">
+                <div class="context-note-form-row">
+                    <input type="text" id="context-note-title-${index}" name="context-note-title" value="${note.title || ''}" class="context-note-input" disabled autocomplete="off" placeholder="タイトル">
+                    <select id="context-note-type-${index}" name="context-note-type" class="context-note-select" disabled>
+                        <option value="keyword" ${note.type === 'keyword' ? 'selected' : ''}>キーワード</option>
+                        <option value="moment" ${note.type === 'moment' ? 'selected' : ''}>モーメント</option>
+                    </select>
+                </div>
+                <div class="context-note-form-row">
+                    <textarea id="context-note-content-${index}" name="context-note-content" class="context-note-textarea" disabled autocomplete="off" placeholder="内容（1行目がサマリーとして扱われます）">${note.content || ''}</textarea>
+                </div>
+                <div class="context-note-form-row">
+                    <input type="text" id="context-note-keywords-${index}" name="context-note-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" disabled autocomplete="off" placeholder="キーワード（カンマ区切り）">
+                </div>
+                <div class="context-note-form-actions">
+                    <button class="move-up-btn" title="上に移動">🔼</button>
+                    <button class="move-down-btn" title="下に移動">🔽</button>
+                    <button class="edit-btn" title="編集">編集</button>
+                    <button class="delete-btn" title="削除">削除</button>
+                </div>
+            </div>
+        `;
+
+        // イベントリスナーを設定
+        const moveUpBtn = item.querySelector('.move-up-btn');
+        const moveDownBtn = item.querySelector('.move-down-btn');
+        const editBtn = item.querySelector('.edit-btn');
+        const deleteBtn = item.querySelector('.delete-btn');
+        
+        moveUpBtn.onclick = () => this.moveContextNote(index, 'up');
+        moveDownBtn.onclick = () => this.moveContextNote(index, 'down');
+        editBtn.onclick = () => this.editContextNote(index);
+        deleteBtn.onclick = () => this.deleteContextNote(index);
+
+        return item;
+    },
+
+    // ContextNoteの追加
+    addContextNote() {
+        const newNote = {
+            title: '',
+            type: 'keyword',
+            content: '',
+            keywords: []
+        };
+
+        const item = this.createContextNoteEditForm(newNote, -1);
+        elements.contextNotesList.appendChild(item);
+    },
+
+    // ContextNoteの編集フォーム作成
+    createContextNoteEditForm(note, index) {
+        const item = document.createElement('div');
+        item.className = 'context-note-item';
+        item.dataset.index = index;
+
+        item.innerHTML = `
+            <div class="context-note-form">
+                <div class="context-note-form-row">
+                    <input type="text" id="context-note-edit-title-${index}" name="context-note-edit-title" value="${note.title || ''}" class="context-note-input" autocomplete="off" placeholder="タイトル">
+                    <select id="context-note-edit-type-${index}" name="context-note-edit-type" class="context-note-select">
+                        <option value="keyword" ${note.type === 'keyword' ? 'selected' : ''}>キーワード</option>
+                        <option value="moment" ${note.type === 'moment' ? 'selected' : ''}>モーメント</option>
+                    </select>
+                </div>
+                <div class="context-note-form-row">
+                    <textarea id="context-note-edit-content-${index}" name="context-note-edit-content" class="context-note-textarea" autocomplete="off" placeholder="内容（1行目がサマリーとして扱われます）">${note.content || ''}</textarea>
+                </div>
+                <div class="context-note-form-row">
+                    <input type="text" id="context-note-edit-keywords-${index}" name="context-note-edit-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" autocomplete="off" placeholder="キーワード（カンマ区切り）">
+                </div>
+                <div class="context-note-form-actions">
+                    <button class="save-btn" title="保存">保存</button>
+                    <button class="cancel-btn" title="キャンセル">キャンセル</button>
+                </div>
+            </div>
+        `;
+
+        // イベントリスナーを設定
+        const saveBtn = item.querySelector('.save-btn');
+        const cancelBtn = item.querySelector('.cancel-btn');
+        
+        saveBtn.onclick = () => this.saveContextNote(index);
+        cancelBtn.onclick = () => this.cancelContextNoteEdit(index);
+
+        return item;
+    },
+
+    // ContextNoteの編集
+    editContextNote(index) {
+        const note = state.contextNote.getAllNotes()[index];
+        if (!note) return;
+
+        const list = elements.contextNotesList;
+        const existingItem = list.querySelector(`[data-index="${index}"]`);
+        if (existingItem) {
+            const editForm = this.createContextNoteEditForm(note, index);
+            existingItem.replaceWith(editForm);
+        }
+    },
+
+    // ContextNoteの保存
+    saveContextNote(index) {
+        const titleInput = document.getElementById(`context-note-edit-title-${index}`);
+        const typeInput = document.getElementById(`context-note-edit-type-${index}`);
+        const contentInput = document.getElementById(`context-note-edit-content-${index}`);
+        const keywordsInput = document.getElementById(`context-note-edit-keywords-${index}`);
+
+        if (!titleInput || !typeInput || !contentInput || !keywordsInput) return;
+
+        const title = titleInput.value.trim();
+        const type = typeInput.value;
+        const content = contentInput.value.trim();
+        const keywords = keywordsInput.value.trim().split(',').map(k => k.trim()).filter(k => k);
+
+        if (!title) {
+            uiUtils.showCustomAlert('タイトルを入力してください');
+            return;
+        }
+
+        if (!content) {
+            uiUtils.showCustomAlert('内容を入力してください');
+            return;
+        }
+
+        // キーワードはそのまま使用（空の場合はContextNoteクラス側でタイトルをキーワードとして扱う）
+        const finalKeywords = keywords;
+
+        if (index === -1) {
+            // 新規追加
+            state.contextNote.addNote(type, title, content, finalKeywords);
+        } else {
+            // 編集
+            state.contextNote.updateNote(index, type, title, content, finalKeywords);
+        }
+
+        // チャットを保存してContextNoteデータを永続化
+        dbUtils.saveChat().catch(error => console.error('ContextNote保存エラー:', error));
+        this.renderContextNotesList();
+    },
+
+    // ContextNoteの削除
+    deleteContextNote(index) {
+        uiUtils.showCustomConfirm('このコンテキストノートを削除しますか？').then(confirmed => {
+            if (confirmed) {
+                if (state.contextNote.removeNote(index)) {
+                    // チャットを保存してContextNoteデータを永続化
+                    dbUtils.saveChat().catch(error => console.error('ContextNote削除保存エラー:', error));
+                    this.renderContextNotesList();
+                }
+            }
+        });
+    },
+
+    // ContextNote編集のキャンセル
+    cancelContextNoteEdit(index) {
+        if (index === -1) {
+            // 新規追加のキャンセル
+            const newItem = elements.contextNotesList.querySelector('[data-index="-1"]');
+            if (newItem) {
+                newItem.remove();
+            }
+        } else {
+            // 編集のキャンセル
+            this.renderContextNotesList();
+        }
+    },
+
+    // ContextNoteの移動
+    moveContextNote(index, direction) {
+        let success = false;
+        
+        if (direction === 'up') {
+            success = state.contextNote.moveUp(index);
+        } else if (direction === 'down') {
+            success = state.contextNote.moveDown(index);
+        }
+        
+        if (success) {
+            // チャットを保存してContextNoteデータを永続化
+            dbUtils.saveChat().catch(error => console.error('ContextNote移動保存エラー:', error));
+            this.renderContextNotesList();
+        }
+    },
+
     // 圧縮状態表示を更新
     updateCompressionStatusDisplay() {
         const compressionStatusContent = document.getElementById('compression-status-content');
@@ -4966,3 +5424,6 @@ const appLogic = {
 
 // ResponseReplacerをグローバルスコープで利用可能にする
 window.ResponseReplacer = ResponseReplacer;
+
+// ContextNoteをグローバルスコープで利用可能にする
+window.ContextNote = ContextNote;
