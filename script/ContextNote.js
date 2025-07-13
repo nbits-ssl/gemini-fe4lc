@@ -147,12 +147,15 @@ class ContextNote {
      * @returns {string} ランダム選択されたノートの文字列
      */
     getRandomMatches() {
-        if (this.notes.length === 0) {
+        // モーメントタイプのノートのみを対象とする
+        const momentNotes = this.notes.filter(note => note.type === 'moment');
+        
+        if (momentNotes.length === 0) {
             return '';
         }
 
-        const randomCount = Math.min(this.settings.randomCount, this.notes.length);
-        const shuffled = [...this.notes].sort(() => 0.5 - Math.random());
+        const randomCount = Math.min(this.settings.randomCount, momentNotes.length);
+        const shuffled = [...momentNotes].sort(() => 0.5 - Math.random());
         const selectedNotes = shuffled.slice(0, randomCount);
 
         return this.buildNoteString(selectedNotes);
@@ -164,12 +167,15 @@ class ContextNote {
      * @returns {string} ランダム選択されたノートの文字列
      */
     getRandomMatchesWithCount(count) {
-        if (this.notes.length === 0) {
+        // モーメントタイプのノートのみを対象とする
+        const momentNotes = this.notes.filter(note => note.type === 'moment');
+        
+        if (momentNotes.length === 0) {
             return '';
         }
 
-        const randomCount = Math.min(count, this.notes.length);
-        const shuffled = [...this.notes].sort(() => 0.5 - Math.random());
+        const randomCount = Math.min(count, momentNotes.length);
+        const shuffled = [...momentNotes].sort(() => 0.5 - Math.random());
         const selectedNotes = shuffled.slice(0, randomCount);
 
         return this.buildNoteString(selectedNotes);

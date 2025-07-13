@@ -37,6 +37,41 @@ const DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT = 6; // 対象メッセージ数（user
 const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 2000; // 対象文字列の最大文字数
 const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 1; // マッチング結果の挿入優先度（1-10）
 
+// デフォルトのコンテキストノート仕様
+const DEFAULT_CONTEXT_NOTE_SPEC = {
+    title: "コンテキストノート仕様",
+    type: "keyword",
+    content: `コンテキストノートは、AIとの対話中に動的に情報を提供する機能です。
+
+【ノートの種類】
+1. キーワードタイプ（keyword）: キーワードマッチングでのみ提供される
+2. モーメントタイプ（moment）: ランダム選択で提供される（キーワードマッチングも可能）
+
+【ノートの構造】
+- title: ノートのタイトル（必須）
+- type: "keyword" または "moment"（必須）
+- content: ノートの内容（必須、1行目がサマリーとして扱われる）
+- keywords: カンマ区切りのキーワード（キーワードタイプ用、空の場合はタイトルがキーワードとして扱われる）
+
+【使用方法】
+- キーワードタイプは、会話中にキーワードが含まれた時に自動的に提供される
+- モーメントタイプは、設定された確率でランダムに選ばれるが、キーワードマッチングでも提供される
+- 各ノートの1行目は、タイトルと合わせてサマリーとして常時提供される
+
+【効果的な使い方】
+- キャラクター設定、世界観、重要な情報をキーワードタイプで設定
+- 過去の会話の記憶や感情的な想い出をモーメントタイプで設定
+- モーメントタイプでもキーワードを設定することで、関連する話題で自動的に思い出される
+- キーワードは具体的で検索しやすい単語を選ぶ
+- 内容は簡潔で分かりやすく記述する
+
+【YAML直接編集】
+- ノート設定画面の「直接編集」ボタンでYAML形式での一括編集が可能
+- YAML形式では改行が保持され、複数行の内容を自然に記述できる
+- 複数のノートを一度に編集・追加・削除できる`,
+    keywords: ["コンテキストノート"]
+};
+
 // 添付を確定する処理
 const extensionToMimeTypeMap = {
     // Text Data
@@ -162,6 +197,14 @@ const elements = {
     contextNotesTab: document.getElementById('context-notes-tab'),
     addContextNoteBtn: document.getElementById('add-context-note-btn'),
     contextNotesList: document.getElementById('context-notes-list'),
+    // 直接編集モーダル要素
+    directEditModal: document.getElementById('direct-edit-modal'),
+    editContextNotesDirectlyBtn: document.getElementById('edit-context-notes-directly-btn'),
+    closeDirectEditModal: document.getElementById('close-direct-edit-modal'),
+    yamlEditor: document.getElementById('yaml-editor'),
+    yamlErrorMessage: document.getElementById('yaml-error-message'),
+    saveYamlBtn: document.getElementById('save-yaml-btn'),
+    cancelYamlBtn: document.getElementById('cancel-yaml-btn'),
     // ボタン
     gotoHistoryBtn: document.getElementById('goto-history-btn'),
     gotoSettingsBtn: document.getElementById('goto-settings-btn'),
@@ -2412,10 +2455,16 @@ const appLogic = {
         await this.loadResponseReplacementsFromChat();
         // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
         this.renderResponseReplacementsList();
-        // ContextNoteを読み込み（現在のチャットデータがない場合は空で初期化）
-        await this.loadContextNotesFromChat();
-        // ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
-        this.renderContextNotesList();
+            // ContextNoteを読み込み（現在のチャットデータがない場合は空で初期化）
+    await this.loadContextNotesFromChat();
+    
+    // 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
+    if (state.contextNote.getAllNotes().length === 0) {
+        this.addDefaultContextNoteSpec();
+    }
+    
+    // ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
+    this.renderContextNotesList();
         uiUtils.showScreen('chat-info');
 		});
         
@@ -2639,6 +2688,19 @@ const appLogic = {
                 this.cancelAttachment(); // OK以外で閉じたらキャンセル
             }
         });
+
+        // 直接編集モーダルイベントリスナー
+        elements.editContextNotesDirectlyBtn.addEventListener('click', () => this.openDirectEditModal());
+        elements.closeDirectEditModal.addEventListener('click', () => this.closeDirectEditModal());
+        elements.saveYamlBtn.addEventListener('click', () => this.saveYamlContent());
+        elements.cancelYamlBtn.addEventListener('click', () => this.closeDirectEditModal());
+        
+        // モーダル外クリックで閉じる
+        elements.directEditModal.addEventListener('click', (event) => {
+            if (event.target === elements.directEditModal) {
+                this.closeDirectEditModal();
+            }
+        });
     },
 
     // popstateイベントハンドラ (戻るボタン/ジェスチャー)
@@ -2811,13 +2873,20 @@ const appLogic = {
     startNewChat() {
         state.currentChatId = null; // IDリセット
         state.currentMessages = []; // メッセージクリア
-        state.currentMessages.responseReplacements = []; // レスポンス置換を初期化
         state.currentSystemPrompt = state.settings.systemPrompt; // デフォルトのシステムプロンプトを適用
         state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
+        
+        // ResponseReplacerを初期化
+        state.responseReplacer = new ResponseReplacer();
+        
         // ContextNoteを初期化
         state.contextNote = new ContextNote();
+        
+        // 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
+        this.addDefaultContextNoteSpec();
+        
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
         uiUtils.renderChatMessages(); // 表示クリア
         uiUtils.updateChatTitle(); // タイトルを「新規チャット」に
@@ -5418,6 +5487,127 @@ const appLogic = {
             console.error('圧縮サマリー更新エラー:', error);
             uiUtils.showCustomAlert('圧縮サマリーの更新に失敗しました');
         }
+    },
+
+    // 直接編集モーダルを開く
+    openDirectEditModal() {
+        // 現在のContextNoteデータをYAML形式に変換
+        const yamlContent = this.convertContextNotesToYaml();
+        elements.yamlEditor.value = yamlContent;
+        elements.yamlErrorMessage.classList.add('hidden');
+        elements.directEditModal.classList.remove('hidden');
+        
+        // エディタにフォーカス
+        setTimeout(() => {
+            elements.yamlEditor.focus();
+        }, 100);
+    },
+
+    // 直接編集モーダルを閉じる
+    closeDirectEditModal() {
+        elements.directEditModal.classList.add('hidden');
+        elements.yamlEditor.value = '';
+        elements.yamlErrorMessage.classList.add('hidden');
+    },
+
+    // ContextNoteデータをYAML形式に変換
+    convertContextNotesToYaml() {
+        const notes = state.contextNote.getAllNotes();
+        if (notes.length === 0) {
+            return '# コンテキストノート\n# 以下の形式でノートを追加してください\n\n';
+        }
+
+        let yaml = '';
+        notes.forEach((note, index) => {
+            if (index > 0) yaml += '\n---\n\n';
+            yaml += `title: ${note.title}\n`;
+            yaml += `type: ${note.type}\n`;
+            yaml += `content: |\n ${note.content.replace(/\n/g, '\n ')}\n`;
+            if (note.keywords && note.keywords.length > 0) {
+                yaml += `keywords: ${note.keywords.join(', ')}\n`;
+            }
+        });
+
+        return yaml;
+    },
+
+    // YAMLコンテンツを保存
+    async saveYamlContent() {
+        const yamlText = elements.yamlEditor.value.trim();
+        
+        if (!yamlText) {
+            // 空の場合は全てのノートを削除
+            state.contextNote.clearNotes();
+            await dbUtils.saveChat();
+            this.closeDirectEditModal();
+            this.renderContextNotesList();
+            return;
+        }
+
+        try {
+            // js-yamlでパース
+            const parsedData = jsyaml.load(yamlText);
+            
+            if (!Array.isArray(parsedData)) {
+                // 単一のノートの場合、配列に変換
+                const notes = [parsedData];
+                this.updateContextNotesFromYaml(notes);
+            } else {
+                // 複数のノートの場合
+                this.updateContextNotesFromYaml(parsedData);
+            }
+
+            // エラーメッセージを非表示
+            elements.yamlErrorMessage.classList.add('hidden');
+            
+            // モーダルを閉じてリストを更新
+            this.closeDirectEditModal();
+            this.renderContextNotesList();
+            
+        } catch (error) {
+            console.error('YAMLパースエラー:', error);
+            // エラーメッセージを表示
+            elements.yamlErrorMessage.textContent = `YAMLパースエラー: ${error.message}`;
+            elements.yamlErrorMessage.classList.remove('hidden');
+        }
+    },
+
+    // YAMLデータからContextNoteを更新
+    updateContextNotesFromYaml(yamlNotes) {
+        // 既存のノートをクリア
+        state.contextNote.clearNotes();
+        
+        // YAMLデータからノートを追加
+        yamlNotes.forEach(yamlNote => {
+            if (yamlNote.title && yamlNote.type && yamlNote.content) {
+                const keywords = yamlNote.keywords ? 
+                    yamlNote.keywords.split(',').map(k => k.trim()).filter(k => k) : 
+                    [];
+                
+                state.contextNote.addNote(
+                    yamlNote.type,
+                    yamlNote.title,
+                    yamlNote.content,
+                    keywords
+                );
+            }
+        });
+        
+        // チャットを保存
+        return dbUtils.saveChat();
+    },
+
+    // デフォルトのコンテキストノート仕様を追加
+    addDefaultContextNoteSpec() {
+        state.contextNote.addNote(
+            DEFAULT_CONTEXT_NOTE_SPEC.type,
+            DEFAULT_CONTEXT_NOTE_SPEC.title,
+            DEFAULT_CONTEXT_NOTE_SPEC.content,
+            DEFAULT_CONTEXT_NOTE_SPEC.keywords
+        );
+
+        // チャットを保存
+        dbUtils.saveChat().catch(error => console.error('デフォルトコンテキストノート保存エラー:', error));
     }
 
 }; // appLogic終了

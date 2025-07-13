@@ -8,6 +8,7 @@
     <meta name="theme-color" id="theme-color-meta" content="#4a90e2">
     <link rel="stylesheet" href="styles.css">
     <script src="marked.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -149,7 +150,10 @@
                     <div class="response-replacements-container">
                         <div class="response-replacements-header">
                             <h3>コンテキストノート設定</h3>
-                            <button id="add-context-note-btn" class="action-button">追加</button>
+                            <div class="header-actions">
+                                <button id="add-context-note-btn" class="action-button">追加</button>
+                                <button id="edit-context-notes-directly-btn" class="action-button secondary">直接編集</button>
+                            </div>
                         </div>
                         
                         <div id="context-notes-list" class="response-replacements-list">
@@ -157,13 +161,7 @@
                         </div>
                         
                         <div class="response-replacements-info">
-                            <p>※ 「内容」の1行目は「タイトル」と合わせて、そのノートのサマリーとして扱われます</p>
-                            <p>※ タイプ「キーワード」はキーワードマッチ、「モーメント」は記憶や想い出として、ランダム選出されます</p>
-                            <p>※ キーワードの方はキャラクター、アイテム、特別なイベントなどの物事・事象に適しています</p>
-                            <p>※ 「モーメント」はセッション履歴などのこれまでの記録に適しています</p>
-                            <p>※ キーワードは「,」で区切って複数可能です</p>
-                            <p>※ キーワードが空欄の場合は、内部的にタイトルがキーワードとして扱われます</p>
-                            <p>※ 各チャットごとに設定が保存されます</p>
+                            <p>※ デフォルトで設定されている「コンテキストノート仕様」のコンテキストノートの内容を参照してください</p>
                         </div>
                     </div>
                 </div>
@@ -532,6 +530,31 @@
             <button id="confirm-attach-btn" value="ok" class="dialog-ok-btn" disabled>添付して閉じる</button>
         </div>
     </dialog>
+
+    <!-- 直接編集モーダル -->
+    <div id="direct-edit-modal" class="modal hidden">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3>コンテキストノート - 直接編集</h3>
+                <button id="close-direct-edit-modal" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="yaml-editor-container">
+                    <textarea id="yaml-editor" placeholder="YAML形式でノートを編集してください..."></textarea>
+                </div>
+                <div id="yaml-error-message" class="error-message hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <div class="footer-notice">
+                    contentの各行の行頭には必ず半角スペースでインデントを入れてください
+                </div>
+                <div class="footer-actions">
+                    <button id="save-yaml-btn" class="primary-button">保存</button>
+                    <button id="cancel-yaml-btn" class="secondary-button">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script/ResponseReplacer.js"></script>
     <script src="script/ContextNote.js"></script>
