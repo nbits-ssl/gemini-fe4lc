@@ -300,6 +300,9 @@ class ContextNote {
                     keywords: note.keywords || []
                 };
             });
+        } else {
+            console.warn('ContextNote.loadFromData: 無効なデータ形式:', data);
+            this.notes = [];
         }
     }
 } 
