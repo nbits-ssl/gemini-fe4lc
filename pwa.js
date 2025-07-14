@@ -36,6 +36,7 @@ const DEFAULT_CONTEXT_NOTE_RANDOM_COUNT = 1; // ランダム選択するノー�
 const DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT = 6; // 対象メッセージ数（user+model合わせて）
 const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 2000; // 対象文字列の最大文字数
 const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 1; // マッチング結果の挿入優先度（1-10）
+const CONTEXT_NOTE_ROLE = 'contextmessage';
 
 // デフォルトのコンテキストノート仕様
 const DEFAULT_CONTEXT_NOTE_SPEC = {
@@ -52,11 +53,13 @@ const DEFAULT_CONTEXT_NOTE_SPEC = {
 - type: "keyword" または "moment"（必須）
 - content: ノートの内容（必須、1行目がサマリーとして扱われる）
 - keywords: カンマ区切りのキーワード（キーワードタイプ用、空の場合はタイトルがキーワードとして扱われる）
+- category: カテゴリ（空欄可、カテゴリ別にグループ化して表示される）
 
 【使用方法】
 - キーワードタイプは、会話中にキーワードが含まれた時に自動的に提供される
 - モーメントタイプは、設定された確率でランダムに選ばれるが、キーワードマッチングでも提供される
 - 各ノートの1行目は、タイトルと合わせてサマリーとして常時提供される
+- カテゴリを設定すると、サマリー表示時にカテゴリ別にグループ化される
 
 【効果的な使い方】
 - キャラクター設定、世界観、重要な情報をキーワードタイプで設定
@@ -64,12 +67,14 @@ const DEFAULT_CONTEXT_NOTE_SPEC = {
 - モーメントタイプでもキーワードを設定することで、関連する話題で自動的に思い出される
 - キーワードは具体的で検索しやすい単語を選ぶ
 - 内容は簡潔で分かりやすく記述する
+- カテゴリを使って関連するノートをグループ化し、AIの理解を助ける
 
 【YAML直接編集】
 - ノート設定画面の「直接編集」ボタンでYAML形式での一括編集が可能
 - YAML形式では改行が保持され、複数行の内容を自然に記述できる
 - 複数のノートを一度に編集・追加・削除できる`,
-    keywords: ["コンテキストノート"]
+    keywords: ["コンテキストノート"],
+    category: ""
 };
 
 // 添付を確定する処理
@@ -3384,7 +3389,7 @@ const appLogic = {
                 
                 // マッチしたノートの内容を指定位置に挿入
                 baseMessages.splice(insertionIndex, 0, {
-                    role: 'user',
+                    role: CONTEXT_NOTE_ROLE,
                     parts: [{ text: matchedNotesString }]
                 });
             }
@@ -3396,15 +3401,10 @@ const appLogic = {
         console.log('state.compressedSummary:', state.compressedSummary);
         console.log('baseMessages:', baseMessages);
         
-        const apiMessages = compressionUtils.buildMessagesForApi(baseMessages, state.isCompressionMode);
-        
-        console.log('最終的なapiMessages:', apiMessages);
-        console.log('=== 圧縮機能デバッグ終了 ===');
-
         const dummyUserText = state.settings.enableDummyUser && state.settings.dummyUser?.trim();
         const dummyModelText = state.settings.enableDummyModel && state.settings.dummyModel?.trim();
-        if (dummyUserText) apiMessages.push({ role: 'user', parts: [{ text: dummyUserText }] });
-        if (dummyModelText) apiMessages.push({ role: 'model', parts: [{ text: dummyModelText }] });
+        if (dummyUserText) baseMessages.push({ role: 'user', parts: [{ text: dummyUserText }] });
+        if (dummyModelText) baseMessages.push({ role: 'model', parts: [{ text: dummyModelText }] });
 
         const generationConfig = {};
         if (state.settings.temperature !== null) generationConfig.temperature = state.settings.temperature;
@@ -3415,6 +3415,21 @@ const appLogic = {
         const systemInstruction = state.currentSystemPrompt?.trim()
             ? { role: "system", parts: [{ text: state.currentSystemPrompt.trim() }] }
             : null;
+
+        // プロンプト確認用データを構築（ContextNoteロールのまま）
+        const promptData = buildPromptDataForCheck(baseMessages, generationConfig, systemInstruction);
+        
+        // ContextNoteロールをuserに戻す（API送信用）
+        baseMessages.forEach(msg => {
+            if (msg.role === CONTEXT_NOTE_ROLE) {
+                msg.role = 'user';
+            }
+        });
+        
+        const apiMessages = compressionUtils.buildMessagesForApi(baseMessages, state.isCompressionMode);
+        
+        console.log('最終的なapiMessages:', apiMessages);
+        console.log('=== 圧縮機能デバッグ終了 ===');
 
         // リクエスト内容を保存（プロンプト確認用）
         const finalGenerationConfig = { ...generationConfig };
@@ -3453,6 +3468,7 @@ const appLogic = {
         // 送信リクエスト内容を保存（送信時刻も含める）
         state.lastSentRequest = {
             ...requestBody,
+            promptData: promptData, // プロンプト確認用データも保存
             sentAt: Date.now()
         };
 
@@ -5216,6 +5232,9 @@ const appLogic = {
                 <div class="context-note-form-row">
                     <input type="text" id="context-note-keywords-${index}" name="context-note-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" disabled autocomplete="off" placeholder="キーワード（カンマ区切り）">
                 </div>
+                <div class="context-note-form-row">
+                    <input type="text" id="context-note-category-${index}" name="context-note-category" value="${note.category || ''}" class="context-note-input" disabled autocomplete="off" placeholder="カテゴリ（空欄可）">
+                </div>
                 <div class="context-note-form-actions">
                     <button class="move-up-btn" title="上に移動">🔼</button>
                     <button class="move-down-btn" title="下に移動">🔽</button>
@@ -5245,7 +5264,8 @@ const appLogic = {
             title: '',
             type: 'keyword',
             content: '',
-            keywords: []
+            keywords: [],
+            category: ''
         };
 
         const item = this.createContextNoteEditForm(newNote, -1);
@@ -5272,6 +5292,9 @@ const appLogic = {
                 </div>
                 <div class="context-note-form-row">
                     <input type="text" id="context-note-edit-keywords-${index}" name="context-note-edit-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" autocomplete="off" placeholder="キーワード（カンマ区切り）">
+                </div>
+                <div class="context-note-form-row">
+                    <input type="text" id="context-note-edit-category-${index}" name="context-note-edit-category" value="${note.category || ''}" class="context-note-input" autocomplete="off" placeholder="カテゴリ（空欄可）">
                 </div>
                 <div class="context-note-form-actions">
                     <button class="save-btn" title="保存">保存</button>
@@ -5309,13 +5332,15 @@ const appLogic = {
         const typeInput = document.getElementById(`context-note-edit-type-${index}`);
         const contentInput = document.getElementById(`context-note-edit-content-${index}`);
         const keywordsInput = document.getElementById(`context-note-edit-keywords-${index}`);
+        const categoryInput = document.getElementById(`context-note-edit-category-${index}`);
 
-        if (!titleInput || !typeInput || !contentInput || !keywordsInput) return;
+        if (!titleInput || !typeInput || !contentInput || !keywordsInput || !categoryInput) return;
 
         const title = titleInput.value.trim();
         const type = typeInput.value;
         const content = contentInput.value.trim();
         const keywords = keywordsInput.value.trim().split(',').map(k => k.trim()).filter(k => k);
+        const category = categoryInput.value.trim();
 
         if (!title) {
             uiUtils.showCustomAlert('タイトルを入力してください');
@@ -5332,10 +5357,10 @@ const appLogic = {
 
         if (index === -1) {
             // 新規追加
-            state.contextNote.addNote(type, title, content, finalKeywords);
+            state.contextNote.addNote(type, title, content, finalKeywords, category);
         } else {
             // 編集
-            state.contextNote.updateNote(index, type, title, content, finalKeywords);
+            state.contextNote.updateNote(index, type, title, content, finalKeywords, category);
         }
 
         // チャットを保存してContextNoteデータを永続化
@@ -5526,6 +5551,9 @@ const appLogic = {
             if (note.keywords && note.keywords.length > 0) {
                 yaml += `keywords: ${note.keywords.join(', ')}\n`;
             }
+            if (note.category && note.category.trim() !== '') {
+                yaml += `category: ${note.category}\n`;
+            }
         });
 
         return yaml;
@@ -5545,17 +5573,17 @@ const appLogic = {
         }
 
         try {
-            // js-yamlでパース
-            const parsedData = jsyaml.load(yamlText);
+            // js-yamlでパース（複数ドキュメント対応）
+            const parsedData = jsyaml.loadAll(yamlText);
             
-            if (!Array.isArray(parsedData)) {
-                // 単一のノートの場合、配列に変換
-                const notes = [parsedData];
-                this.updateContextNotesFromYaml(notes);
-            } else {
-                // 複数のノートの場合
-                this.updateContextNotesFromYaml(parsedData);
+            // 空のドキュメントをフィルタリング
+            const notes = parsedData.filter(doc => doc && typeof doc === 'object');
+            
+            if (notes.length === 0) {
+                throw new Error('有効なノートが見つかりません');
             }
+            
+            this.updateContextNotesFromYaml(notes);
 
             // エラーメッセージを非表示
             elements.yamlErrorMessage.classList.add('hidden');
@@ -5583,12 +5611,14 @@ const appLogic = {
                 const keywords = yamlNote.keywords ? 
                     yamlNote.keywords.split(',').map(k => k.trim()).filter(k => k) : 
                     [];
+                const category = yamlNote.category || '';
                 
                 state.contextNote.addNote(
                     yamlNote.type,
                     yamlNote.title,
                     yamlNote.content,
-                    keywords
+                    keywords,
+                    category
                 );
             }
         });
@@ -5603,7 +5633,8 @@ const appLogic = {
             DEFAULT_CONTEXT_NOTE_SPEC.type,
             DEFAULT_CONTEXT_NOTE_SPEC.title,
             DEFAULT_CONTEXT_NOTE_SPEC.content,
-            DEFAULT_CONTEXT_NOTE_SPEC.keywords
+            DEFAULT_CONTEXT_NOTE_SPEC.keywords,
+            DEFAULT_CONTEXT_NOTE_SPEC.category
         );
 
         // チャットを保存

@@ -24,9 +24,10 @@ class ContextNote {
      * @param {string} title - ノートのタイトル
      * @param {string} content - ノートの内容（1行目がサマリーとして扱われる）
      * @param {string[]} keywords - キーワード配列
+     * @param {string} category - カテゴリ（空欄可）
      * @returns {number} 追加されたノートのインデックス
      */
-    addNote(type, title, content, keywords = []) {
+    addNote(type, title, content, keywords = [], category = '') {
         if (!['moment', 'keyword'].includes(type)) {
             throw new Error('Invalid type. Must be "moment" or "keyword"');
         }
@@ -39,7 +40,8 @@ class ContextNote {
             title: title,
             content: content,
             summary: summary,
-            keywords: keywords
+            keywords: keywords,
+            category: category || ''
         };
 
         this.notes.push(newNote);
@@ -66,9 +68,10 @@ class ContextNote {
      * @param {string} title - ノートのタイトル
      * @param {string} content - ノートの内容
      * @param {string[]} keywords - キーワード配列
+     * @param {string} category - カテゴリ（空欄可）
      * @returns {boolean} 更新が成功したかどうか
      */
-    updateNote(index, type, title, content, keywords = []) {
+    updateNote(index, type, title, content, keywords = [], category = '') {
         if (index >= 0 && index < this.notes.length) {
             const lines = content.split('\n');
             const summary = lines[0] || '';
@@ -78,7 +81,8 @@ class ContextNote {
                 title: title,
                 content: content,
                 summary: summary,
-                keywords: keywords
+                keywords: keywords,
+                category: category || ''
             };
             return true;
         }
@@ -182,7 +186,7 @@ class ContextNote {
     }
 
     /**
-     * 全ノートのサマリー文字列を取得（タイトル+サマリー）
+     * 全ノートのサマリー文字列を取得（カテゴリ別に整理）
      * @returns {string} 全ノートのサマリー文字列
      */
     getAllNotesSummary() {
@@ -191,7 +195,7 @@ class ContextNote {
         }
 
         const summaryNotes = this.notes.filter(note => note.summary);
-        return this.buildSummaryString(summaryNotes);
+        return this.buildCategorizedSummaryString(summaryNotes);
     }
 
     /**
@@ -248,6 +252,53 @@ class ContextNote {
     }
 
     /**
+     * カテゴリ別サマリー文字列をビルド
+     * @param {Object[]} notes - ノート配列
+     * @returns {string} ビルドされた文字列
+     */
+    buildCategorizedSummaryString(notes) {
+        if (notes.length === 0) {
+            return '';
+        }
+
+        // カテゴリなしのノートを最初に取得（順番通り）
+        const noCategoryNotes = notes.filter(note => !note.category || note.category.trim() === '');
+        
+        // カテゴリありのノートをカテゴリ別にグループ化
+        const categorizedNotes = {};
+        notes.forEach(note => {
+            if (note.category && note.category.trim() !== '') {
+                const category = note.category.trim();
+                if (!categorizedNotes[category]) {
+                    categorizedNotes[category] = [];
+                }
+                categorizedNotes[category].push(note);
+            }
+        });
+
+        const result = [];
+
+        // 1. カテゴリなしのノートを最初に追加（順番通り）
+        if (noCategoryNotes.length > 0) {
+            const noCategorySummary = noCategoryNotes.map(note => {
+                return `${note.title}：${note.summary}`;
+            }).join('\n');
+            result.push(noCategorySummary);
+        }
+
+        // 2. カテゴリ別のノートを追加
+        Object.keys(categorizedNotes).forEach(category => {
+            const categoryNotes = categorizedNotes[category];
+            const categorySummary = categoryNotes.map(note => {
+                return `${note.title}：${note.summary}`;
+            }).join('\n');
+            result.push(`[${category}]\n${categorySummary}`);
+        });
+
+        return result.join('\n\n');
+    }
+
+    /**
      * 設定を更新
      * @param {Object} newSettings - 新しい設定
      */
@@ -279,7 +330,8 @@ class ContextNote {
             type: note.type,
             title: note.title,
             content: note.content,
-            keywords: note.keywords
+            keywords: note.keywords,
+            category: note.category || ''
         }));
     }
 
@@ -297,7 +349,8 @@ class ContextNote {
                     title: note.title || '',
                     content: note.content || '',
                     summary: summary,
-                    keywords: note.keywords || []
+                    keywords: note.keywords || [],
+                    category: note.category || ''
                 };
             });
         } else {

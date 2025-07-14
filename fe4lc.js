@@ -483,90 +483,113 @@ const compressionUI = {
     }
 };
 
-// プロンプト確認用のデータを構築
-function buildPromptDataForCheck() {
-    // 保存されたリクエスト内容があればそれを表示、なければ未送信メッセージを表示
-    if (state.lastSentRequest) {
-        // 送信時刻を表示
-        let result = '';
-        if (state.lastSentRequest.sentAt) {
-            const sentDate = new Date(state.lastSentRequest.sentAt);
-            const formattedDate = sentDate.getFullYear() + '/' + 
-                String(sentDate.getMonth() + 1).padStart(2, '0') + '/' + 
-                String(sentDate.getDate()).padStart(2, '0') + ' ' +
-                String(sentDate.getHours()).padStart(2, '0') + ':' + 
-                String(sentDate.getMinutes()).padStart(2, '0') + ':' + 
-                String(sentDate.getSeconds()).padStart(2, '0');
-            result = `Last sent: ${formattedDate}\n\n`;
+// リクエストデータを表示用に処理する関数
+function processRequestForDisplay(requestBody) {
+    // テキストを短縮表示するためのヘルパー関数
+    const shortenText = (text) => {
+        if (text.length <= 100) {
+            return text;
         }
-        
-        // テキストを短縮表示するためのヘルパー関数
-        const shortenText = (text) => {
-            if (text.length <= 100) {
-                return text;
-            }
-            const first30 = text.substring(0, 30);
-            const last30 = text.substring(text.length - 30);
-            return `${first30}${OMISSION_TEXT}${last30}：トータル${text.length}字`;
-        };
-        
-        // リクエストデータをディープコピーして短縮処理
-        const shortenedRequest = JSON.parse(JSON.stringify(state.lastSentRequest));
-        
-        // sentAtフィールドを削除（表示用データから除外）
-        delete shortenedRequest.sentAt;
-        
-        // contentsの各メッセージのpartsを処理
-        if (shortenedRequest.contents) {
-            shortenedRequest.contents.forEach(content => {
-                if (content.parts) {
-                    content.parts.forEach(part => {
-                        if (part.text) {
-                            // 圧縮データ（COMPRESSED_SUMMARY_PREFIXで始まるテキスト）は短縮しない
-                            if (part.text.startsWith(COMPRESSED_SUMMARY_PREFIX)) {
-                                // 圧縮データはそのまま表示
-                            } else {
-                                part.text = shortenText(part.text);
-                            }
+        const first30 = text.substring(0, 30);
+        const last30 = text.substring(text.length - 30);
+        return `${first30}${OMISSION_TEXT}${last30}：トータル${text.length}字`;
+    };
+    
+    // リクエストデータをディープコピーして短縮処理
+    const shortenedRequest = JSON.parse(JSON.stringify(requestBody));
+    
+    // contentsの各メッセージのpartsを処理
+    if (shortenedRequest.contents) {
+        console.log('プロンプト確認処理 - CONTEXT_NOTE_ROLE:', CONTEXT_NOTE_ROLE);
+        shortenedRequest.contents.forEach(content => {
+            console.log('プロンプト確認処理 - content.role:', content.role);
+            if (content.parts) {
+                content.parts.forEach(part => {
+                    if (part.text) {
+                        console.log('プロンプト確認処理 - part.text:', part.text.substring(0, 50) + '...');
+                        // 圧縮データまたはContextNoteデータは短縮しない
+                        if (part.text.startsWith(COMPRESSED_SUMMARY_PREFIX) || 
+                            content.role === CONTEXT_NOTE_ROLE) {
+                            console.log('プロンプト確認処理 - 短縮スキップ（ContextNoteまたは圧縮データ）');
+                            // そのまま表示
+                        } else {
+                            console.log('プロンプト確認処理 - 短縮実行');
+                            part.text = shortenText(part.text);
                         }
-                        // inlineData（添付ファイル）の場合はdataを置き換え
-                        if (part.inlineData) {
-                            part.inlineData.data = "【添付ファイルデータ】";
-                        }
-                    });
-                }
-            });
-        }
-        
-        
-        // partsの部分は改行なしにするためのカスタムJSON文字列化
-        const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
-            const indent = ' '.repeat(space * currentDepth);
-            const nextIndent = ' '.repeat(space * (currentDepth + 1));
-            
-            if (Array.isArray(obj)) {
-                if (obj.length === 0) return '[]';
-                // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
-                if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
-                    return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
-                }
-                return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
+                    }
+                    // inlineData（添付ファイル）の場合はdataを置き換え
+                    if (part.inlineData) {
+                        part.inlineData.data = "【添付ファイルデータ】";
+                    }
+                });
             }
             
-            if (obj && typeof obj === 'object') {
-                const keys = Object.keys(obj);
-                if (keys.length === 0) return '{}';
-                return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
+            // ContextNoteロールをuserに戻す
+            if (content.role === CONTEXT_NOTE_ROLE) {
+                console.log('プロンプト確認処理 - ContextNoteロールをuserに戻す');
+                content.role = 'user';
             }
-            
-            return JSON.stringify(obj);
-        };
-        
-        return result + customStringify(shortenedRequest);
+        });
     }
     
-    // 保存されたリクエストがない場合
-    return "送信された内容はありません";
+    // partsの部分は改行なしにするためのカスタムJSON文字列化
+    const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
+        const indent = ' '.repeat(space * currentDepth);
+        const nextIndent = ' '.repeat(space * (currentDepth + 1));
+        
+        if (Array.isArray(obj)) {
+            if (obj.length === 0) return '[]';
+            // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
+            if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
+                return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
+            }
+            return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
+        }
+        
+        if (obj && typeof obj === 'object') {
+            const keys = Object.keys(obj);
+            if (keys.length === 0) return '{}';
+            return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
+        }
+        
+        return JSON.stringify(obj);
+    };
+    
+    return customStringify(shortenedRequest);
+}
+
+// プロンプト確認用のデータを構築
+function buildPromptDataForCheck(apiMessages = null, generationConfig = null, systemInstruction = null) {
+    // 引数が渡された場合は新規構築、なければ保存されたデータを使用
+    if (apiMessages) {
+        // 新規構築
+        const requestBody = {
+            contents: apiMessages,
+            ...(Object.keys(generationConfig || {}).length > 0 && { generationConfig }),
+            ...(systemInstruction && { systemInstruction })
+        };
+        
+        // 短縮処理を実行
+        return processRequestForDisplay(requestBody);
+    } else {
+        // 保存されたデータを使用
+        if (state.lastSentRequest && state.lastSentRequest.promptData) {
+            // 送信時刻を表示
+            let result = '';
+            if (state.lastSentRequest.sentAt) {
+                const sentDate = new Date(state.lastSentRequest.sentAt);
+                const formattedDate = sentDate.getFullYear() + '/' + 
+                    String(sentDate.getMonth() + 1).padStart(2, '0') + '/' + 
+                    String(sentDate.getDate()).padStart(2, '0') + ' ' +
+                    String(sentDate.getHours()).padStart(2, '0') + ':' + 
+                    String(sentDate.getMinutes()).padStart(2, '0') + ':' + 
+                    String(sentDate.getSeconds()).padStart(2, '0');
+                result = `Last sent: ${formattedDate}\n\n`;
+            }
+            return result + state.lastSentRequest.promptData;
+        }
+        return "送信された内容はありません";
+    }
 }
 
 
