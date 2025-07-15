@@ -4,10 +4,16 @@ const CACHE_NAME = 'gemini-pwa-cache-v1'; // キャッシュ名を変更する�
 const urlsToCache = [
   './', // ルートパス (index.html を指すことが多い)
   './index.html',
-  './manifest.json',
+  './pwa.js',
+  './fe4lc.js',
+  './styles.css',
   './marked.js',
+  './script/ContextNote.js',
+  './script/ResponseReplacer.js',
+  './manifest.json',
   // アイコンファイルもキャッシュする場合 (manifest.json で指定したもの)
   './icon-192x192.png',
+  './gemini-Icon.png',
 ];
 
 // インストール時にキャッシュを作成
