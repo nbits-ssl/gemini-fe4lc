@@ -72,6 +72,7 @@ const DEFAULT_CONTEXT_NOTE_SPEC = {
 【YAML直接編集】
 - ノート設定画面の「直接編集」ボタンでYAML形式での一括編集が可能
 - YAML形式では改行が保持され、複数行の内容を自然に記述できる
+- 各コンテキストノートは「---」で区切られる
 - 複数のノートを一度に編集・追加・削除できる`,
     keywords: ["コンテキストノート"],
     category: ""
@@ -5069,6 +5070,16 @@ const appLogic = {
 
         const item = this.createResponseReplacementEditForm(newReplacement, -1);
         elements.responseReplacementsList.appendChild(item);
+        
+        // 一番下までスクロール
+        setTimeout(() => {
+            const tabContent = elements.responseReplacementsTab;
+            if (tabContent) {
+                tabContent.scrollTop = tabContent.scrollHeight;
+            }
+            // フォールバック: window全体をスクロール
+            window.scrollTo(0, document.body.scrollHeight);
+        }, 25);
     },
 
     // レスポンス置換の編集フォーム作成
@@ -5225,31 +5236,32 @@ const appLogic = {
                         <option value="keyword" ${note.type === 'keyword' ? 'selected' : ''}>キーワード</option>
                         <option value="moment" ${note.type === 'moment' ? 'selected' : ''}>モーメント</option>
                     </select>
+                    <input type="text" id="context-note-keywords-${index}" name="context-note-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" disabled autocomplete="off" placeholder="キーワード（カンマ区切り）">
                 </div>
                 <div class="context-note-form-row">
                     <textarea id="context-note-content-${index}" name="context-note-content" class="context-note-textarea" disabled autocomplete="off" placeholder="内容（1行目がサマリーとして扱われます）">${note.content || ''}</textarea>
                 </div>
                 <div class="context-note-form-row">
-                    <input type="text" id="context-note-keywords-${index}" name="context-note-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" disabled autocomplete="off" placeholder="キーワード（カンマ区切り）">
-                </div>
-                <div class="context-note-form-row">
                     <input type="text" id="context-note-category-${index}" name="context-note-category" value="${note.category || ''}" class="context-note-input" disabled autocomplete="off" placeholder="カテゴリ（空欄可）">
-                </div>
-                <div class="context-note-form-actions">
-                    <button class="move-up-btn" title="上に移動">🔼</button>
-                    <button class="move-down-btn" title="下に移動">🔽</button>
-                    <button class="edit-btn" title="編集">編集</button>
-                    <button class="delete-btn" title="削除">削除</button>
+                    <div class="context-note-form-actions">
+                        <button class="insert-below-btn" title="ここの下に新規追加">⤵️</button>
+                        <button class="move-up-btn" title="上に移動">🔼</button>
+                        <button class="move-down-btn" title="下に移動">🔽</button>
+                        <button class="edit-btn" title="編集">編集</button>
+                        <button class="delete-btn" title="削除">削除</button>
+                    </div>
                 </div>
             </div>
         `;
 
         // イベントリスナーを設定
+        const insertBelowBtn = item.querySelector('.insert-below-btn');
         const moveUpBtn = item.querySelector('.move-up-btn');
         const moveDownBtn = item.querySelector('.move-down-btn');
         const editBtn = item.querySelector('.edit-btn');
         const deleteBtn = item.querySelector('.delete-btn');
         
+        insertBelowBtn.onclick = () => this.insertContextNoteBelow(index);
         moveUpBtn.onclick = () => this.moveContextNote(index, 'up');
         moveDownBtn.onclick = () => this.moveContextNote(index, 'down');
         editBtn.onclick = () => this.editContextNote(index);
@@ -5270,6 +5282,16 @@ const appLogic = {
 
         const item = this.createContextNoteEditForm(newNote, -1);
         elements.contextNotesList.appendChild(item);
+        
+        // 一番下までスクロール
+        setTimeout(() => {
+            const tabContent = elements.contextNotesTab;
+            if (tabContent) {
+                tabContent.scrollTop = tabContent.scrollHeight;
+            }
+            // フォールバック: window全体をスクロール
+            window.scrollTo(0, document.body.scrollHeight);
+        }, 25);
     },
 
     // ContextNoteの編集フォーム作成
@@ -5286,19 +5308,17 @@ const appLogic = {
                         <option value="keyword" ${note.type === 'keyword' ? 'selected' : ''}>キーワード</option>
                         <option value="moment" ${note.type === 'moment' ? 'selected' : ''}>モーメント</option>
                     </select>
+                    <input type="text" id="context-note-edit-keywords-${index}" name="context-note-edit-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" autocomplete="off" placeholder="キーワード（カンマ区切り）">
                 </div>
                 <div class="context-note-form-row">
                     <textarea id="context-note-edit-content-${index}" name="context-note-edit-content" class="context-note-textarea" autocomplete="off" placeholder="内容（1行目がサマリーとして扱われます）">${note.content || ''}</textarea>
                 </div>
                 <div class="context-note-form-row">
-                    <input type="text" id="context-note-edit-keywords-${index}" name="context-note-edit-keywords" value="${note.keywords ? note.keywords.join(', ') : ''}" class="context-note-input" autocomplete="off" placeholder="キーワード（カンマ区切り）">
-                </div>
-                <div class="context-note-form-row">
                     <input type="text" id="context-note-edit-category-${index}" name="context-note-edit-category" value="${note.category || ''}" class="context-note-input" autocomplete="off" placeholder="カテゴリ（空欄可）">
-                </div>
-                <div class="context-note-form-actions">
-                    <button class="save-btn" title="保存">保存</button>
-                    <button class="cancel-btn" title="キャンセル">キャンセル</button>
+                    <div class="context-note-form-actions">
+                        <button class="save-btn" title="保存">保存</button>
+                        <button class="cancel-btn" title="キャンセル">キャンセル</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -5357,7 +5377,17 @@ const appLogic = {
 
         if (index === -1) {
             // 新規追加
-            state.contextNote.addNote(type, title, content, finalKeywords, category);
+            const newItem = elements.contextNotesList.querySelector('[data-index="-1"]');
+            const insertAfterIndex = newItem ? newItem.dataset.insertAfter : null;
+            
+            if (insertAfterIndex !== null && insertAfterIndex !== undefined) {
+                // 指定位置の下に挿入
+                const insertIndex = parseInt(insertAfterIndex) + 1;
+                state.contextNote.insertNoteAt(insertIndex, type, title, content, finalKeywords, category);
+            } else {
+                // 最後に追加
+                state.contextNote.addNote(type, title, content, finalKeywords, category);
+            }
         } else {
             // 編集
             state.contextNote.updateNote(index, type, title, content, finalKeywords, category);
@@ -5409,6 +5439,31 @@ const appLogic = {
             // チャットを保存してContextNoteデータを永続化
             dbUtils.saveChat().catch(error => console.error('ContextNote移動保存エラー:', error));
             this.renderContextNotesList();
+        }
+    },
+
+    // 指定位置の下にContextNoteを挿入
+    insertContextNoteBelow(index) {
+        const newNote = {
+            title: '',
+            type: 'keyword',
+            content: '',
+            keywords: [],
+            category: ''
+        };
+
+        const item = this.createContextNoteEditForm(newNote, -1);
+        const list = elements.contextNotesList;
+        const existingItem = list.querySelector(`[data-index="${index}"]`);
+        
+        if (existingItem) {
+            // 指定されたアイテムの直後に挿入
+            existingItem.after(item);
+            // 挿入位置を記録
+            item.dataset.insertAfter = index;
+        } else {
+            // 見つからない場合は最後に追加
+            list.appendChild(item);
         }
     },
 
@@ -5521,11 +5576,6 @@ const appLogic = {
         elements.yamlEditor.value = yamlContent;
         elements.yamlErrorMessage.classList.add('hidden');
         elements.directEditModal.classList.remove('hidden');
-        
-        // エディタにフォーカス
-        setTimeout(() => {
-            elements.yamlEditor.focus();
-        }, 100);
     },
 
     // 直接編集モーダルを閉じる
@@ -5547,13 +5597,13 @@ const appLogic = {
             if (index > 0) yaml += '\n---\n\n';
             yaml += `title: ${note.title}\n`;
             yaml += `type: ${note.type}\n`;
-            yaml += `content: |\n ${note.content.replace(/\n/g, '\n ')}\n`;
             if (note.keywords && note.keywords.length > 0) {
                 yaml += `keywords: ${note.keywords.join(', ')}\n`;
             }
             if (note.category && note.category.trim() !== '') {
                 yaml += `category: ${note.category}\n`;
             }
+            yaml += `content: |\n ${note.content.replace(/\n/g, '\n ')}`;
         });
 
         return yaml;

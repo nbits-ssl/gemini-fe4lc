@@ -49,6 +49,38 @@ class ContextNote {
     }
 
     /**
+     * 指定位置にノートを挿入
+     * @param {number} index - 挿入する位置のインデックス
+     * @param {string} type - ノートのタイプ ('moment' または 'keyword')
+     * @param {string} title - ノートのタイトル
+     * @param {string} content - ノートの内容（1行目がサマリーとして扱われる）
+     * @param {string[]} keywords - キーワード配列
+     * @param {string} category - カテゴリ（空欄可）
+     * @returns {number} 挿入されたノートのインデックス
+     */
+    insertNoteAt(index, type, title, content, keywords = [], category = '') {
+        if (!['moment', 'keyword'].includes(type)) {
+            throw new Error('Invalid type. Must be "moment" or "keyword"');
+        }
+
+        const lines = content.split('\n');
+        const summary = lines[0] || '';
+
+        const newNote = {
+            type: type,
+            title: title,
+            content: content,
+            summary: summary,
+            keywords: keywords,
+            category: category || ''
+        };
+
+        // 指定位置に挿入
+        this.notes.splice(index, 0, newNote);
+        return index; // 挿入されたインデックスを返す
+    }
+
+    /**
      * ノートを削除
      * @param {number} index - 削除するノートのインデックス
      * @returns {boolean} 削除が成功したかどうか

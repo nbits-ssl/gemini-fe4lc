@@ -2408,16 +2408,12 @@ body.dark-mode .compression-summary-textarea:focus {
 /* コンテキストノート設定のスタイル（レスポンス置換設定のクラスを再利用） */
 .context-note-item {
     background-color: var(--bg-tertiary);
-    border: 1px solid var(--border-secondary);
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    transition: all 0.2s ease;
+    border-bottom: 1px solid var(--border-secondary);
+    padding: 10px;
 }
 
 .context-note-item:hover {
     border-color: var(--border-primary);
-    box-shadow: 0 2px 8px var(--shadow-primary);
 }
 
 .context-note-header {
@@ -2461,18 +2457,16 @@ body.dark-mode .compression-summary-textarea:focus {
 }
 
 .context-note-form {
-    background-color: var(--bg-input);
-    border: 1px solid var(--border-primary);
-    border-radius: 6px;
-    padding: 15px;
-    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
 }
 
 .context-note-form-row {
     display: flex;
-    gap: 10px;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .context-note-input {
@@ -2484,6 +2478,8 @@ body.dark-mode .compression-summary-textarea:focus {
     color: var(--text-primary);
     font-size: 14px;
     transition: border-color 0.2s ease;
+    height: 32px;
+    box-sizing: border-box;
 }
 
 .context-note-input:focus {
@@ -2537,36 +2533,94 @@ body.dark-mode .context-note-input:disabled {
     color: var(--text-primary);
     font-size: 12px;
     resize: vertical;
-    min-height: 120px;
+    min-height: 100px;
 }
 
 .context-note-form-actions {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     justify-content: flex-end;
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid var(--border-secondary);
+    margin-top: -8px;
 }
 
 .context-note-form-actions button {
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: 14px;
     border-radius: 4px;
-    min-width: 60px;
+    border: none;
+    cursor: pointer;
     transition: background-color 0.2s ease;
+    min-width: 60px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.context-note-form-actions button .insert-below-btn,
+.context-note-form-actions button .move-up-btn,
+.context-note-form-actions button .move-down-btn {
+    paggin-top: 0px;
+}
+
+.context-note-form-actions .save-btn {
+    background-color: var(--bg-button-save);
+    color: white;
+}
+
+.context-note-form-actions .save-btn:hover {
+    background-color: var(--bg-button-save-hover);
+}
+
+.context-note-form-actions .cancel-btn {
+    background-color: var(--bg-button-cancel);
+    color: white;
+}
+
+.context-note-form-actions .cancel-btn:hover {
+    background-color: var(--bg-button-cancel-hover);
+}
+
+.context-note-form-actions .edit-btn {
+    background-color: var(--bg-button-edit);
+    color: white;
+}
+
+.context-note-form-actions .edit-btn:hover {
+    background-color: var(--bg-button-edit-hover);
+}
+
+.context-note-form-actions .delete-btn {
+    background-color: var(--bg-button-delete);
+    color: white;
+}
+
+.context-note-form-actions .delete-btn:hover {
+    background-color: var(--bg-button-delete-hover);
 }
 
 .context-note-form-actions .move-up-btn,
-.context-note-form-actions .move-down-btn {
-    background-color: var(--bg-button-action);
-    min-width: 40px;
-    padding: 6px 8px;
+.context-note-form-actions .move-down-btn,
+.context-note-form-actions .insert-below-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    margin: -5px 0;
+    min-width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
 }
 
 .context-note-form-actions .move-up-btn:hover,
-.context-note-form-actions .move-down-btn:hover {
-    background-color: var(--bg-button-action-hover);
+.context-note-form-actions .move-down-btn:hover,
+.context-note-form-actions .insert-below-btn:hover {
+    color: var(--text-primary);
 }
 
 /* ダークモード対応 */
@@ -2577,7 +2631,6 @@ body.dark-mode .context-note-item {
 
 body.dark-mode .context-note-item:hover {
     border-color: var(--border-secondary);
-    box-shadow: 0 2px 8px var(--shadow-secondary);
 }
 
 /* ヘッダーアクション */
@@ -2585,6 +2638,7 @@ body.dark-mode .context-note-item:hover {
     display: flex;
     gap: 10px;
     align-items: center;
+    padding-right: 10px;
 }
 
 .action-button.secondary {

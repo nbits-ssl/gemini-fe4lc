@@ -485,76 +485,76 @@ const compressionUI = {
 
 // リクエストデータを表示用に処理する関数
 function processRequestForDisplay(requestBody) {
-    // テキストを短縮表示するためのヘルパー関数
-    const shortenText = (text) => {
-        if (text.length <= 100) {
-            return text;
-        }
-        const first30 = text.substring(0, 30);
-        const last30 = text.substring(text.length - 30);
-        return `${first30}${OMISSION_TEXT}${last30}：トータル${text.length}字`;
-    };
-    
-    // リクエストデータをディープコピーして短縮処理
+        // テキストを短縮表示するためのヘルパー関数
+        const shortenText = (text) => {
+            if (text.length <= 100) {
+                return text;
+            }
+            const first30 = text.substring(0, 30);
+            const last30 = text.substring(text.length - 30);
+            return `${first30}${OMISSION_TEXT}${last30}：トータル${text.length}字`;
+        };
+        
+        // リクエストデータをディープコピーして短縮処理
     const shortenedRequest = JSON.parse(JSON.stringify(requestBody));
-    
-    // contentsの各メッセージのpartsを処理
-    if (shortenedRequest.contents) {
+        
+        // contentsの各メッセージのpartsを処理
+        if (shortenedRequest.contents) {
         console.log('プロンプト確認処理 - CONTEXT_NOTE_ROLE:', CONTEXT_NOTE_ROLE);
-        shortenedRequest.contents.forEach(content => {
+            shortenedRequest.contents.forEach(content => {
             console.log('プロンプト確認処理 - content.role:', content.role);
-            if (content.parts) {
-                content.parts.forEach(part => {
-                    if (part.text) {
+                if (content.parts) {
+                    content.parts.forEach(part => {
+                        if (part.text) {
                         console.log('プロンプト確認処理 - part.text:', part.text.substring(0, 50) + '...');
                         // 圧縮データまたはContextNoteデータは短縮しない
                         if (part.text.startsWith(COMPRESSED_SUMMARY_PREFIX) || 
                             content.role === CONTEXT_NOTE_ROLE) {
                             console.log('プロンプト確認処理 - 短縮スキップ（ContextNoteまたは圧縮データ）');
                             // そのまま表示
-                        } else {
+                            } else {
                             console.log('プロンプト確認処理 - 短縮実行');
-                            part.text = shortenText(part.text);
+                                part.text = shortenText(part.text);
+                            }
                         }
-                    }
-                    // inlineData（添付ファイル）の場合はdataを置き換え
-                    if (part.inlineData) {
-                        part.inlineData.data = "【添付ファイルデータ】";
-                    }
-                });
-            }
+                        // inlineData（添付ファイル）の場合はdataを置き換え
+                        if (part.inlineData) {
+                            part.inlineData.data = "【添付ファイルデータ】";
+                        }
+                    });
+                }
             
             // ContextNoteロールをuserに戻す
             if (content.role === CONTEXT_NOTE_ROLE) {
                 console.log('プロンプト確認処理 - ContextNoteロールをuserに戻す');
                 content.role = 'user';
             }
-        });
-    }
-    
-    // partsの部分は改行なしにするためのカスタムJSON文字列化
-    const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
-        const indent = ' '.repeat(space * currentDepth);
-        const nextIndent = ' '.repeat(space * (currentDepth + 1));
+            });
+        }
         
-        if (Array.isArray(obj)) {
-            if (obj.length === 0) return '[]';
-            // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
-            if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
-                return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
+        // partsの部分は改行なしにするためのカスタムJSON文字列化
+        const customStringify = (obj, space = 2, currentDepth = 0, parentKey = '') => {
+            const indent = ' '.repeat(space * currentDepth);
+            const nextIndent = ' '.repeat(space * (currentDepth + 1));
+            
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) return '[]';
+                // parts配列の場合（深さに関係なく、親キーが'parts'の場合）は改行なし
+                if (parentKey === 'parts' && obj[0] && typeof obj[0] === 'object' && 'text' in obj[0]) {
+                    return '[' + obj.map(item => JSON.stringify(item)).join(', ') + ']';
+                }
+                return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
             }
-            return '[\n' + obj.map(item => nextIndent + customStringify(item, space, currentDepth + 1)).join(',\n') + '\n' + indent + ']';
-        }
+            
+            if (obj && typeof obj === 'object') {
+                const keys = Object.keys(obj);
+                if (keys.length === 0) return '{}';
+                return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
+            }
+            
+            return JSON.stringify(obj);
+        };
         
-        if (obj && typeof obj === 'object') {
-            const keys = Object.keys(obj);
-            if (keys.length === 0) return '{}';
-            return '{\n' + keys.map(key => nextIndent + `"${key}": ` + customStringify(obj[key], space, currentDepth + 1, key)).join(',\n') + '\n' + indent + '}';
-        }
-        
-        return JSON.stringify(obj);
-    };
-    
     return customStringify(shortenedRequest);
 }
 
@@ -588,7 +588,7 @@ function buildPromptDataForCheck(apiMessages = null, generationConfig = null, sy
             }
             return result + state.lastSentRequest.promptData;
         }
-        return "送信された内容はありません";
+    return "送信された内容はありません";
     }
 }
 
