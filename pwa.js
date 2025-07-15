@@ -37,6 +37,8 @@ const DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT = 6; // 対象メッセージ数（user
 const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 2000; // 対象文字列の最大文字数
 const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 1; // マッチング結果の挿入優先度（1-10）
 const CONTEXT_NOTE_ROLE = 'contextmessage';
+const REFERENCE_TAG_START = '<reference>';
+const REFERENCE_TAG_END = '</reference>';
 
 // デフォルトのコンテキストノート仕様
 const DEFAULT_CONTEXT_NOTE_SPEC = {
@@ -3361,6 +3363,7 @@ const appLogic = {
             });
 
         // ContextNote機能: キーワードマッチングとランダム選択の結果を追加
+        let matchedNotesResult = null;
         if (state.contextNote) {
             // 設定に基づいてContextNote対象のメッセージを取得
             const targetMessages = state.currentMessages
@@ -3378,29 +3381,23 @@ const appLogic = {
             }
             
             // マッチしたノートの文字列を取得（新しい設定を使用）
-            const matchedNotesString = state.contextNote.getMatchedNotesString(
+            matchedNotesResult = state.contextNote.getMatchedNotesString(
                 chatText, 
                 state.settings.contextNoteRandomFrequency,
                 state.settings.contextNoteRandomCount
             );
             
-            if (matchedNotesString) {
+            if (matchedNotesResult.text) {
                 // 挿入優先度に基づいて挿入位置を決定
                 const insertionIndex = calculateInsertionIndex(state.settings.contextNoteInsertionPriority, baseMessages);
                 
                 // マッチしたノートの内容を指定位置に挿入
                 baseMessages.splice(insertionIndex, 0, {
                     role: CONTEXT_NOTE_ROLE,
-                    parts: [{ text: matchedNotesString }]
+                    parts: [{ text: `${REFERENCE_TAG_START}\n${matchedNotesResult.text}\n${REFERENCE_TAG_END}` }]
                 });
             }
         }
-
-        // 圧縮機能を使用してメッセージ配列を構築
-        console.log('=== 圧縮機能デバッグ ===');
-        console.log('state.isCompressionMode:', state.isCompressionMode);
-        console.log('state.compressedSummary:', state.compressedSummary);
-        console.log('baseMessages:', baseMessages);
         
         const dummyUserText = state.settings.enableDummyUser && state.settings.dummyUser?.trim();
         const dummyModelText = state.settings.enableDummyModel && state.settings.dummyModel?.trim();
@@ -3417,16 +3414,12 @@ const appLogic = {
             ? { role: "system", parts: [{ text: state.currentSystemPrompt.trim() }] }
             : null;
 
-        // プロンプト確認用データを構築（ContextNoteロールのまま）
-        const promptData = buildPromptDataForCheck(baseMessages, generationConfig, systemInstruction);
-        
-        // ContextNoteロールをuserに戻す（API送信用）
-        baseMessages.forEach(msg => {
-            if (msg.role === CONTEXT_NOTE_ROLE) {
-                msg.role = 'user';
-            }
-        });
-        
+        // 圧縮機能を使用してメッセージ配列を構築
+        console.log('=== 圧縮機能デバッグ ===');
+        console.log('state.isCompressionMode:', state.isCompressionMode);
+        console.log('state.compressedSummary:', state.compressedSummary);
+        console.log('baseMessages:', baseMessages);
+
         const apiMessages = compressionUtils.buildMessagesForApi(baseMessages, state.isCompressionMode);
         
         console.log('最終的なapiMessages:', apiMessages);
@@ -3466,11 +3459,40 @@ const appLogic = {
             requestBody.tools = [{ "google_search": {} }];
         }
 
-        // 送信リクエスト内容を保存（送信時刻も含める）
+        // プロンプト確認用データを構築（実際のrequestBodyを使用）
+        const promptData = buildPromptDataForCheck(requestBody);
+
+		// ContextNoteロールをuserに戻す（API送信用）
+        apiMessages.forEach(msg => {
+            if (msg.role === CONTEXT_NOTE_ROLE) {
+                msg.role = 'user';
+            }
+        });
+
+        // 文字数情報を計算
+        let compressionChars = 0;
+        let contextNoteChars = 0;
+        let contextNoteMatches = 0;
+        
+        // 圧縮サマリの文字数を計算
+        if (state.compressedSummary) {
+            const summaryContent = state.compressedSummary.summary || '';
+            compressionChars = summaryContent.length;
+        }
+        
+        // ContextNoteの文字数とマッチ数を取得
+        if (matchedNotesResult && matchedNotesResult.text) {
+            contextNoteChars = matchedNotesResult.charCount;
+            contextNoteMatches = matchedNotesResult.matchCount;
+        }
+        
+        // 送信リクエスト内容を保存（送信時刻と文字数情報も含める）
         state.lastSentRequest = {
-            ...requestBody,
-            promptData: promptData, // プロンプト確認用データも保存
-            sentAt: Date.now()
+            promptData: promptData, // プロンプト確認用データ
+            sentAt: Date.now(),
+            compressionChars: compressionChars,
+            contextNoteChars: contextNoteChars,
+            contextNoteMatches: contextNoteMatches
         };
 
         // --- 5. API呼び出しと応答処理 ---

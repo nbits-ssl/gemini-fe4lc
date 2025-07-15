@@ -2208,7 +2208,7 @@ body.dark-mode .replacement-input:disabled {
 
 .response-replacements-info p {
     margin: 0 0 8px 0;
-    font-size: 13px;
+    font-size: 11px;
     color: var(--text-secondary);
     line-height: 1.4;
 }

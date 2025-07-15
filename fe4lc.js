@@ -1,7 +1,8 @@
 // fe4lc.js - 追加機能用JavaScriptファイル
 
 // 定数定義
-const COMPRESSED_SUMMARY_PREFIX = '[summary]';
+const SUMMARY_TAG_START = '<summary>';
+const SUMMARY_TAG_END = '</summary>';
 const COMPRESSION_COMPLETION_MESSAGE = (compressedCount) => `圧縮が完了しました（${compressedCount}メッセージを要約）`;
 
 
@@ -203,7 +204,7 @@ const compressionUtils = {
                     console.log(`圧縮サマリを挿入: index ${index}`);
                     result.push({
                         role: 'user',
-                        parts: [{ text: `${COMPRESSED_SUMMARY_PREFIX} ${state.compressedSummary.summary}` }]
+                        parts: [{ text: `${SUMMARY_TAG_START}\n${state.compressedSummary.summary}\n${SUMMARY_TAG_END}` }]
                     });
                     summaryInserted = true;
                 } else {
@@ -508,7 +509,7 @@ function processRequestForDisplay(requestBody) {
                         if (part.text) {
                         console.log('プロンプト確認処理 - part.text:', part.text.substring(0, 50) + '...');
                         // 圧縮データまたはContextNoteデータは短縮しない
-                        if (part.text.startsWith(COMPRESSED_SUMMARY_PREFIX) || 
+                        if (part.text.startsWith(SUMMARY_TAG_START) || 
                             content.role === CONTEXT_NOTE_ROLE) {
                             console.log('プロンプト確認処理 - 短縮スキップ（ContextNoteまたは圧縮データ）');
                             // そのまま表示
@@ -558,18 +559,13 @@ function processRequestForDisplay(requestBody) {
     return customStringify(shortenedRequest);
 }
 
+
+
 // プロンプト確認用のデータを構築
-function buildPromptDataForCheck(apiMessages = null, generationConfig = null, systemInstruction = null) {
-    // 引数が渡された場合は新規構築、なければ保存されたデータを使用
-    if (apiMessages) {
-        // 新規構築
-        const requestBody = {
-            contents: apiMessages,
-            ...(Object.keys(generationConfig || {}).length > 0 && { generationConfig }),
-            ...(systemInstruction && { systemInstruction })
-        };
-        
-        // 短縮処理を実行
+function buildPromptDataForCheck(requestBody = null) {
+    // 引数が渡された場合は保存用のデータを短縮処理して返す
+	// なければ保存されたデータを使用して閲覧用のデータを返す
+    if (requestBody) {
         return processRequestForDisplay(requestBody);
     } else {
         // 保存されたデータを使用
@@ -584,9 +580,20 @@ function buildPromptDataForCheck(apiMessages = null, generationConfig = null, sy
                     String(sentDate.getHours()).padStart(2, '0') + ':' + 
                     String(sentDate.getMinutes()).padStart(2, '0') + ':' + 
                     String(sentDate.getSeconds()).padStart(2, '0');
-                result = `Last sent: ${formattedDate}\n\n`;
+                result = `Last sent: ${formattedDate}\n`;
             }
-            return result + state.lastSentRequest.promptData;
+            
+            // 保存された文字数情報を使用
+            let charInfoText = '';
+            if (state.lastSentRequest.compressionChars !== undefined || 
+                state.lastSentRequest.contextNoteChars !== undefined) {
+                const compressionChars = state.lastSentRequest.compressionChars || 0;
+                const contextNoteChars = state.lastSentRequest.contextNoteChars || 0;
+                const contextNoteMatches = state.lastSentRequest.contextNoteMatches || 0;
+                charInfoText = `Compression summary: ${compressionChars} characters\nContextNote: ${contextNoteChars} characters (${contextNoteMatches} matches)\n\n`;
+            }
+            
+            return result + charInfoText + state.lastSentRequest.promptData;
         }
     return "送信された内容はありません";
     }

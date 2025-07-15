@@ -179,6 +179,33 @@ class ContextNote {
     }
 
     /**
+     * キーワードマッチしたノート配列を取得
+     * @param {string} text - マッチング対象のテキスト
+     * @returns {Object[]} マッチしたノート配列
+     */
+    getKeywordMatchedNotes(text) {
+        if (!this.settings.keywordMatchEnabled) {
+            return [];
+        }
+
+        const matchedNotes = [];
+        
+        for (const note of this.notes) {
+            // キーワードが空の場合はタイトルをキーワードとして扱う
+            const keywords = note.keywords.length > 0 ? note.keywords : [note.title];
+            
+            for (const keyword of keywords) {
+                if (text.includes(keyword)) {
+                    matchedNotes.push(note);
+                    break; // 1つのノートで1つのキーワードがマッチしたら十分
+                }
+            }
+        }
+
+        return matchedNotes;
+    }
+
+    /**
      * ランダム選択を実行
      * @returns {string} ランダム選択されたノートの文字列
      */
@@ -218,6 +245,26 @@ class ContextNote {
     }
 
     /**
+     * 指定された数のランダム選択を実行（配列を返す）
+     * @param {number} count - 選択するノートの数
+     * @returns {Object[]} ランダム選択されたノート配列
+     */
+    getRandomMatchedNotesArray(count) {
+        // モーメントタイプのノートのみを対象とする
+        const momentNotes = this.notes.filter(note => note.type === 'moment');
+        
+        if (momentNotes.length === 0) {
+            return [];
+        }
+
+        const randomCount = Math.min(count, momentNotes.length);
+        const shuffled = [...momentNotes].sort(() => 0.5 - Math.random());
+        const selectedNotes = shuffled.slice(0, randomCount);
+
+        return selectedNotes;
+    }
+
+    /**
      * 全ノートのサマリー文字列を取得（カテゴリ別に整理）
      * @returns {string} 全ノートのサマリー文字列
      */
@@ -235,22 +282,29 @@ class ContextNote {
      * @param {string} text - マッチング対象のテキスト
      * @param {number} randomFrequency - ランダム選択の確率（0.0-1.0）
      * @param {number} randomCount - ランダム選択するノートの数
-     * @returns {string} マッチしたノートの文字列
+     * @returns {Object} { text: string, charCount: number, matchCount: number } マッチしたノートの情報
      */
     getMatchedNotesString(text, randomFrequency = 0.3, randomCount = 1) {
-        const keywordMatches = this.getKeywordMatches(text);
+        // キーワードマッチのノート配列を取得
+        const keywordMatchedNotes = this.getKeywordMatchedNotes(text);
         
         // ランダム選択の確率に基づいて実行
-        let randomMatches = '';
+        let randomMatchedNotes = [];
         if (Math.random() < randomFrequency) {
-            randomMatches = this.getRandomMatchesWithCount(randomCount);
+            randomMatchedNotes = this.getRandomMatchedNotesArray(randomCount);
         }
         
-        const results = [];
-        if (keywordMatches) results.push(keywordMatches);
-        if (randomMatches) results.push(randomMatches);
+        // 全マッチしたノートを結合
+        const allMatchedNotes = [...keywordMatchedNotes, ...randomMatchedNotes];
         
-        return results.join('\n\n');
+        // 文字列を生成
+        const resultText = this.buildNoteString(allMatchedNotes);
+        
+        return {
+            text: resultText,
+            charCount: resultText.length,
+            matchCount: allMatchedNotes.length
+        };
     }
 
     /**
