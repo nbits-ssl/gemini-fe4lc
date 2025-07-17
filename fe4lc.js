@@ -393,8 +393,18 @@ const compressionUtils = {
                     }
                 } else {
                     console.error('圧縮API応答に有効なコンテンツがありません');
+                    
+                    // finishReasonを取得してエラーメッセージに含める
+                    let errorMessage = '圧縮処理に失敗しました。API応答に有効なコンテンツがありません。';
+                    
+                    if (candidate && candidate.finishReason) {
+                        errorMessage += ` (理由: ${candidate.finishReason})`;
+                    } else if (data.promptFeedback && data.promptFeedback.blockReason) {
+                        errorMessage += ` (理由: ${data.promptFeedback.blockReason})`;
+                    }
+                    
                     // エラーメッセージを表示（一時的な表示のみ）
-                    uiUtils.appendMessage('assistant', '圧縮処理に失敗しました。API応答に有効なコンテンツがありません。', -1, false, null, null, true);
+                    uiUtils.appendMessage('assistant', errorMessage, -1, false, null, null, true);
                     uiUtils.scrollToBottom();
                 }
             }
