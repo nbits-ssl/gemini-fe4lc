@@ -34,8 +34,8 @@ const MAX_TOTAL_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 1メッセージあたり
 const DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY = 0.3; // ランダム選択の確率（0.0-1.0）
 const DEFAULT_CONTEXT_NOTE_RANDOM_COUNT = 1; // ランダム選択するノートの数
 const DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT = 6; // 対象メッセージ数（user+model合わせて）
-const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 2000; // 対象文字列の最大文字数
-const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 1; // マッチング結果の挿入優先度（1-10）
+const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 5000; // 対象文字列の最大文字数
+const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 2; // マッチング結果の挿入優先度（1-5）
 const CONTEXT_NOTE_ROLE = 'contextmessage';
 const REFERENCE_TAG_START = '<reference>';
 const REFERENCE_TAG_END = '</reference>';
@@ -299,7 +299,7 @@ const state = {
         contextNoteRandomCount: DEFAULT_CONTEXT_NOTE_RANDOM_COUNT, // ランダム選択するノートの数
         contextNoteMessageCount: DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT, // ContextNote対象メッセージ数（user+model合わせて）
         contextNoteMaxChars: DEFAULT_CONTEXT_NOTE_MAX_CHARS, // ContextNote対象文字列の最大文字数
-        contextNoteInsertionPriority: DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY, // マッチング結果の挿入優先度（1-10）
+        contextNoteInsertionPriority: DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY, // マッチング結果の挿入優先度（1-5）
     },
     backgroundImageUrl: null, // 生成されたオブジェクトURL (DBには保存しない)
     isSending: false,
@@ -359,15 +359,14 @@ function filterMessagesForApi(messages) {
 
 // ContextNote挿入位置を計算する関数
 function calculateInsertionIndex(priority, baseMessages) {
-    // priority: 1-10の値
+    // priority: 1-5の値
     // baseMessages: 現在のメッセージ配列
     
-    if (priority <= 0 || priority > 10) {
+    if (priority <= 0 || priority > 5) {
         return baseMessages.length; // デフォルトは最後に追加
     }
     
-    // 優先度に基づいて挿入位置を計算
-    // 1=最新ユーザーの直上、2=2番目のユーザーの下、3=2番目のユーザーの上...
+    // ユーザーメッセージのインデックスを取得
     const userMessageIndices = [];
     for (let i = 0; i < baseMessages.length; i++) {
         if (baseMessages[i] && baseMessages[i].role === 'user') {
@@ -379,33 +378,26 @@ function calculateInsertionIndex(priority, baseMessages) {
         return baseMessages.length; // ユーザーメッセージがない場合は最後に追加
     }
     
-    // 優先度に基づいて挿入位置を決定
-    if (priority === 1) {
-        // 最新ユーザーメッセージの直上
-        return userMessageIndices[userMessageIndices.length - 1];
-    } else if (priority === 2) {
-        // 2番目のユーザーメッセージの下
-        if (userMessageIndices.length >= 2) {
-            return userMessageIndices[userMessageIndices.length - 2] + 1;
-        } else {
-            return baseMessages.length;
+    // 優先度に基づいて挿入位置を決定（ユーザーメッセージの上のみ）
+    // 1=最新ユーザーの上、2=2番目のユーザーの上、3=3番目のユーザーの上...
+    // ただし、第1投の上には配置しない（最高でも2投目の上まで）
+    // システムメッセージが挿入されているため、実際の挿入位置を調整
+    const maxPriority = Math.min(priority, userMessageIndices.length - 1);
+    const targetIndex = Math.min(maxPriority - 1, userMessageIndices.length - 2);
+    const baseInsertionIndex = userMessageIndices[userMessageIndices.length - targetIndex - 1];
+    
+    // 第1投の場合は、システムメッセージの直後（第1投の直後）に挿入
+    if (targetIndex === userMessageIndices.length - 2) {
+        // システムメッセージの位置を探す
+        for (let i = baseInsertionIndex + 1; i < baseMessages.length; i++) {
+            if (baseMessages[i] && baseMessages[i].role === 'system') {
+                return i + 1; // システムメッセージの直後
+            }
         }
-    } else if (priority === 3) {
-        // 2番目のユーザーメッセージの上
-        if (userMessageIndices.length >= 2) {
-            return userMessageIndices[userMessageIndices.length - 2];
-        } else {
-            return baseMessages.length;
-        }
-    } else {
-        // 4-10の優先度は、ユーザーメッセージの位置に基づいて計算
-        const targetIndex = Math.min(priority - 1, userMessageIndices.length);
-        if (targetIndex < userMessageIndices.length) {
-            return userMessageIndices[userMessageIndices.length - targetIndex - 1];
-        } else {
-            return baseMessages.length;
-        }
+        return baseInsertionIndex + 1; // システムメッセージが見つからない場合は第1投の直後
     }
+    
+    return baseInsertionIndex;
 }
 
 // ファイルサイズを読みやすい形式にフォーマット
@@ -765,8 +757,8 @@ const dbUtils = {
                     ...(state.lastSentRequest && { lastSentRequest: state.lastSentRequest }),
                     // レスポンス置換データを保存
                     ...(state.responseReplacer && { responseReplacements: state.responseReplacer.getSaveData() }),
-					// ContextNoteデータを保存
-    			    ...(state.contextNote && { contextNotes: state.contextNote.getSaveData() }),
+					                    // ContextNoteデータを保存
+                    ...(state.contextNote && { contextNotes: state.contextNote.getSaveData() }),
                 };
                 if (chatIdForOperation) { // IDがあれば更新なのでIDを付与
                     chatData.id = chatIdForOperation;
@@ -993,6 +985,13 @@ const uiUtils = {
         // トークン表示を更新
         if (typeof tokenUtils !== 'undefined') {
             tokenUtils.updateTokenDisplay();
+        }
+        
+        // ContextNoteシステムメッセージを表示
+        try {
+            appLogic.displayContextNoteSystemMessage();
+        } catch (error) {
+            console.warn('ContextNoteシステムメッセージ表示エラー:', error);
         }
     },
 
@@ -1282,10 +1281,18 @@ const uiUtils = {
                 editButton.onclick = () => appLogic.startEditMessage(index, messageDiv);
                 actionsDiv.appendChild(editButton);
 
-                // 削除ボタン (メッセージペア全体削除)
+                // 削除ボタン (メッセージペア全体削除) - 第1投は無効化
                 const deleteButton = document.createElement('button');
-                deleteButton.textContent = '削除'; deleteButton.title = 'この会話ターンを削除'; deleteButton.classList.add('js-delete-btn');
-                deleteButton.onclick = () => appLogic.deleteMessage(index); // 既存の全体削除関数
+                deleteButton.textContent = '削除'; 
+                deleteButton.title = index === 0 ? '第1投は削除できません' : 'この会話ターンを削除'; 
+                deleteButton.classList.add('js-delete-btn');
+                if (index === 0) {
+                    deleteButton.disabled = true;
+                    deleteButton.style.opacity = '0.5';
+                    deleteButton.style.cursor = 'not-allowed';
+                } else {
+                    deleteButton.onclick = () => appLogic.deleteMessage(index); // 既存の全体削除関数
+                }
                 actionsDiv.appendChild(deleteButton);
 
                 // ユーザーメッセージにはリトライボタンも追加
@@ -2412,11 +2419,17 @@ const appLogic = {
             uiUtils.applySettingsToUI();
 
             // 最新のチャットを読み込むか、新規チャットを開始
-            const chats = await dbUtils.getAllChats(state.settings.historySortOrder);
-            if (chats && chats.length > 0) {
-                await this.loadChat(chats[0].id); // 最新チャットを読み込み
-            } else {
-                this.startNewChat(); // 履歴がなければ新規チャット
+            try {
+                const chats = await dbUtils.getAllChats(state.settings.historySortOrder);
+                if (chats && chats.length > 0) {
+                    await this.loadChat(chats[0].id); // 最新チャットを読み込み
+                } else {
+                    this.startNewChat(); // 履歴がなければ新規チャット
+                }
+            } catch (error) {
+                console.error("チャット読み込みエラー:", error);
+                // エラーが発生した場合は新規チャットを開始
+                this.startNewChat();
             }
             
             // 圧縮ボタンのテキストを更新
@@ -3074,8 +3087,8 @@ const appLogic = {
                     title: newTitle,
                     // 圧縮データもコピー
                     ...(chat.compressedSummary && { compressedSummary: chat.compressedSummary }),
-                            // ContextNoteデータもコピー
-        ...(chat.contextNotes && { contextNotes: [...chat.contextNotes] })
+                                                // ContextNoteデータもコピー
+                    ...(chat.contextNotes && { contextNotes: [...chat.contextNotes] })
                 };
                 // 新しいチャットとしてDBに追加
                 const newChatId = await new Promise((resolve, reject) => {
@@ -3277,20 +3290,15 @@ const appLogic = {
             uiUtils.adjustTextareaHeight();
             uiUtils.scrollToBottom();
 
-            // ContextNote機能: 第1投後にサマリーを挿入（新規チャットの場合のみ）
-            if (state.contextNote && state.currentMessages.length === 1) {
-                const summaryString = state.contextNote.getAllNotesSummary();
-                if (summaryString) {
-                    const summaryMessage = {
-                        role: 'user',
-                        content: summaryString,
-                        timestamp: Date.now(),
-                        attachments: []
-                    };
-                    state.currentMessages.push(summaryMessage);
-                    uiUtils.appendMessage(summaryMessage.role, summaryMessage.content, state.currentMessages.length - 1, false, null, summaryMessage.attachments);
-                    uiUtils.scrollToBottom();
+            // ContextNote機能: サマリーを2投目として画面上に表示
+            try {
+                if (state.contextNote && state.currentMessages.length === 1) {
+                    console.log('ContextNoteサマリーを2投目として画面上に表示');
+                    // システムメッセージとして表示
+                    this.displayContextNoteSystemMessage();
                 }
+            } catch (error) {
+                console.warn('ContextNoteサマリー表示エラー:', error);
             }
         } else {
             console.log("リトライ処理開始 (handleSend内):", state.currentMessages[userMessageIndex]);
@@ -3362,13 +3370,30 @@ const appLogic = {
                 return { role: msg.role, parts: parts };
             });
 
+        // ContextNote機能: サマリーを動的に2投目として挿入
+        if (state.contextNote && baseMessages.length >= 1) {
+            const summaryString = state.contextNote.getAllNotesSummary();
+            if (summaryString) {
+                console.log('ContextNoteサマリーを2投目として動的挿入');
+                baseMessages.splice(1, 0, {
+                    role: 'user',
+                    parts: [{ text: summaryString }]
+                });
+            }
+        }
+
         // ContextNote機能: キーワードマッチングとランダム選択の結果を追加
         let matchedNotesResult = null;
         if (state.contextNote) {
             // 設定に基づいてContextNote対象のメッセージを取得
-            const targetMessages = state.currentMessages
+            let targetMessages = state.currentMessages
                 .filter(msg => msg.role === 'user' || msg.role === 'model')
                 .slice(-state.settings.contextNoteMessageCount); // 最新のN件を取得
+            
+            // 最初のユーザー発言を除外（最初のユーザーメッセージが含まれている場合）
+            if (targetMessages.length > 0 && targetMessages[0].role === 'user') {
+                targetMessages = targetMessages.slice(1);
+            }
             
             // チャットのやり取りを文字列として取得
             let chatText = targetMessages
@@ -4085,9 +4110,9 @@ const appLogic = {
             if (isNaN(newSettings.contextNoteMaxChars) || newSettings.contextNoteMaxChars < 100) {
                 newSettings.contextNoteMaxChars = DEFAULT_CONTEXT_NOTE_MAX_CHARS;
             }
-            if (isNaN(newSettings.contextNoteInsertionPriority) || newSettings.contextNoteInsertionPriority < 1 || newSettings.contextNoteInsertionPriority > 10) {
-                newSettings.contextNoteInsertionPriority = DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY;
-            }
+                    if (isNaN(newSettings.contextNoteInsertionPriority) || newSettings.contextNoteInsertionPriority < 1 || newSettings.contextNoteInsertionPriority > 5) {
+            newSettings.contextNoteInsertionPriority = DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY;
+        }
             // --- バリデーション終了 ---
 
             try {
@@ -5711,6 +5736,52 @@ const appLogic = {
 
         // チャットを保存
         dbUtils.saveChat().catch(error => console.error('デフォルトコンテキストノート保存エラー:', error));
+    },
+
+    // ContextNoteシステムメッセージを表示・更新
+    displayContextNoteSystemMessage() {
+        if (!state.contextNote) return;
+
+        // 既存のシステムメッセージを削除
+        const existingSystemMessage = elements.messageContainer.querySelector('.message.system-info');
+        if (existingSystemMessage) {
+            existingSystemMessage.remove();
+        }
+
+        // 新しいサマリーを取得
+        const summaryString = state.contextNote.getAllNotesSummary();
+        
+        // メッセージが存在しない場合（新規チャット）は表示しない
+        const messages = elements.messageContainer.querySelectorAll('.message');
+        if (messages.length === 0) {
+            return;
+        }
+        
+        if (summaryString) {
+            // 新しいシステムメッセージを作成
+            const summaryMessageDiv = document.createElement('div');
+            summaryMessageDiv.classList.add('message', 'system-info');
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+            
+            const pre = document.createElement('pre');
+            pre.textContent = summaryString;
+            contentDiv.appendChild(pre);
+            
+            summaryMessageDiv.appendChild(contentDiv);
+
+            // 2投目の位置に挿入（最初のユーザーメッセージの後）
+            if (messages.length >= 1) {
+                // 最初のメッセージの後に挿入
+                elements.messageContainer.insertBefore(summaryMessageDiv, messages[1]);
+            } else {
+                // メッセージがない場合は最初に追加
+                elements.messageContainer.appendChild(summaryMessageDiv);
+            }
+            
+            uiUtils.scrollToBottom();
+        }
     }
 
 }; // appLogic終了

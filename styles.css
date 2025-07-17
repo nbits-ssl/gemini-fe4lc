@@ -625,6 +625,52 @@ body.dark-mode #chat-screen::before {
     border-bottom-left-radius: 5px;
     max-width: 90%;
 }
+
+/* システムメッセージ用スタイル（緑枠の灰色背景） */
+.message.system-info {
+    background-color: #f5f5f5;
+    border: 2px solid #4caf50;
+    border-radius: 8px;
+    margin-left: auto;
+    margin-right: 0;
+    max-width: var(--message-max-width);
+    position: relative;
+    align-self: flex-end;
+    border-bottom-right-radius: 8px;
+}
+
+
+
+.message.system-info::before {
+    content: "contextnote summary";
+    position: absolute;
+    top: -10px;
+    left: 10px;
+    background-color: #4caf50;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    z-index: 1;
+}
+
+.message.system-info.compression-prompt::before {
+    content: "compression prompt";
+}
+
+
+
+/* ダークモード用 */
+body.dark-mode .message.system-info {
+    background-color: #2a2a2a;
+    border-color: #66bb6a;
+}
+
+body.dark-mode .message.system-info::before {
+    background-color: #66bb6a;
+}
+
+
 .message.error {
     background-color: var(--bg-error-message);
     color: var(--text-error);
@@ -1241,8 +1287,9 @@ body.dark-mode .token-display {
     border: 1px solid var(--border-tertiary);
     color: var(--text-secondary);
 }
-/* ユーザーメッセージの<pre>は背景色透過が必要 */
-.message.user .message-content pre {
+/* ユーザーメッセージとシステムメッセージの<pre>は背景色透過が必要 */
+.message.user .message-content pre,
+.message.system-info .message-content pre {
     background-color: transparent;
     padding: 0;
     margin: 0;

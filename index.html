@@ -50,7 +50,7 @@
                 <div id="token-display" class="token-display"></div>
             </main>
             <footer class="chat-input-area">
-                <button id="prompt-check-btn" class="prompt-check-button" title="チャット情報" aria-label="チャット情報">🔍</button>
+                <button id="prompt-check-btn" class="prompt-check-button" title="チャット情報" aria-label="チャット情報">📝</button>
                 <textarea id="user-input" placeholder="メッセージを入力..." rows="1" aria-label="メッセージ入力"></textarea>
                 <!-- 添付ファイルボタンを追加 -->
                 <button id="attach-file-btn" title="ファイルを添付">+<span class="attachment-badge"></span></button>
@@ -347,21 +347,21 @@
                             <input type="number" id="context-note-message-count" step="1" min="1" placeholder="6" aria-label="対象メッセージ数">
                         </div>
                         <div>
-                            <label for="context-note-max-chars">最大文字数:</label>
-                            <input type="number" id="context-note-max-chars" step="100" min="100" placeholder="2000" aria-label="最大文字数">
+                            <label for="context-note-max-chars">対象最大文字数:</label>
+                            <input type="number" id="context-note-max-chars" step="100" min="100" placeholder="5000" aria-label="対象最大文字数">
                         </div>
                     </div>
                     <div class="param-grid">
                         <div>
-                            <label for="context-note-insertion-priority">マッチング結果の挿入優先度 (1-10):</label>
-                            <input type="number" id="context-note-insertion-priority" step="1" min="1" max="10" placeholder="1" aria-label="挿入優先度">
+						<label for="context-note-insertion-priority">マッチング結果の挿入優先度 (1-5):</label>
+                        <input type="number" id="context-note-insertion-priority" step="1" min="1" max="5" placeholder="2" aria-label="挿入優先度">
                         </div>
                     </div>
                     <p style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
                         ※ ランダム選択の確率: 0.0-1.0の範囲で、値が大きいほどランダム選択が頻繁に実行されます。<br>
                         ※ 対象メッセージ数: 最新のN件のメッセージをキーワードマッチングの対象とします。<br>
-                        ※ 最大文字数: マッチング対象の文字列がこの文字数を超える場合、最新部分のみを使用します。<br>
-                        ※ 挿入優先度: 1=最新ユーザーの直上、2=2番目のユーザーの下、3=2番目のユーザーの上...の順で挿入位置を決定します。
+                        ※ 最大文字数: キーワードマッチング対象の会話文字列(過去のやり取り)がこの文字数を超える場合、最新部分のみを使用します。<br>
+                        ※ 挿入優先度: 1=最新ユーザー発言の上、2=2番目のユーザー発言の上、3=3番目のユーザー発言の上...の順で挿入位置を決定します。
                     </p>
                 </div>
                 <div class="settings-group">

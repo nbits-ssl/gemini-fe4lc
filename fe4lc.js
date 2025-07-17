@@ -259,8 +259,21 @@ const compressionUtils = {
         // UI制御開始
         compressionUI.startCompression();
 
-        // 圧縮プロンプトをチャットに表示（一時的な表示のみ）
-        uiUtils.appendMessage('user', compressionPrompt, -1, false, null, null, true);
+        // 圧縮プロンプトをチャットに表示（システムメッセージスタイル）
+        const compressionPromptDiv = document.createElement('div');
+        compressionPromptDiv.classList.add('message', 'system-info', 'compression-prompt');
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+        
+        const pre = document.createElement('pre');
+        pre.textContent = compressionPrompt;
+        contentDiv.appendChild(pre);
+        
+        compressionPromptDiv.appendChild(contentDiv);
+
+        // 最後に追加
+        elements.messageContainer.appendChild(compressionPromptDiv);
         uiUtils.scrollToBottom();
 
         // 圧縮用のメッセージ配列を構築
