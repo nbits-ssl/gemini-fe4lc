@@ -130,6 +130,7 @@
                         <div class="response-replacements-header">
                             <h3>レスポンス置換設定</h3>
                             <div class="header-actions">
+                                <button id="edit-response-replacements-directly-btn" class="action-button secondary">直接編集</button>
                                 <button id="add-response-replacement-btn" class="action-button">追加</button>
                             </div>
                         </div>
@@ -546,7 +547,7 @@
         </div>
     </dialog>
 
-    <!-- 直接編集モーダル -->
+    <!-- コンテキストノート直接編集モーダル -->
     <div id="direct-edit-modal" class="modal hidden">
         <div class="modal-content large-modal">
             <div class="modal-header">
@@ -554,8 +555,8 @@
                 <button id="close-direct-edit-modal" class="modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="yaml-editor-container">
-                    <textarea id="yaml-editor" placeholder="YAML形式でノートを編集してください..."></textarea>
+                                    <div class="yaml-editor-container">
+                        <textarea id="yaml-editor" class="yaml-editor" placeholder="YAML形式でノートを編集してください..."></textarea>
                 </div>
                 <div id="yaml-error-message" class="error-message hidden"></div>
             </div>
@@ -566,6 +567,28 @@
                 <div class="footer-actions">
                     <button id="save-yaml-btn" class="primary-button">保存</button>
                     <button id="cancel-yaml-btn" class="secondary-button">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- レスポンス置き換え直接編集モーダル -->
+    <div id="response-replacements-direct-edit-modal" class="modal hidden">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3>レスポンス置き換え - 直接編集</h3>
+                <button id="close-response-replacements-direct-edit-modal" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                                    <div class="yaml-editor-container">
+                        <textarea id="response-replacements-yaml-editor" class="yaml-editor" placeholder="YAML形式でレスポンス置き換えを編集してください..."></textarea>
+                </div>
+                <div id="response-replacements-yaml-error-message" class="error-message hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <div class="footer-actions">
+                    <button id="save-response-replacements-yaml-btn" class="primary-button">保存</button>
+                    <button id="cancel-response-replacements-yaml-btn" class="secondary-button">キャンセル</button>
                 </div>
             </div>
         </div>

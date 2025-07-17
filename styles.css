@@ -2803,7 +2803,7 @@ body.dark-mode .context-note-item:hover {
     flex-direction: column;
 }
 
-#yaml-editor {
+.yaml-editor {
     flex: 1;
     min-height: 400px;
     font-family: 'Courier New', monospace;
@@ -2817,7 +2817,7 @@ body.dark-mode .context-note-item:hover {
     color: var(--text-primary);
 }
 
-#yaml-editor:focus {
+.yaml-editor:focus {
     outline: none;
     border-color: var(--bg-button);
     box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
@@ -2886,13 +2886,14 @@ body.dark-mode .modal-footer {
     border-top-color: var(--border-primary);
 }
 
-body.dark-mode #yaml-editor {
+body.dark-mode .yaml-editor {
     background-color: var(--bg-input);
     color: var(--text-primary);
     border-color: var(--border-primary);
 }
 
-body.dark-mode #yaml-editor:focus {
+body.dark-mode .yaml-editor:focus {
     border-color: var(--bg-button);
     box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
 }
+

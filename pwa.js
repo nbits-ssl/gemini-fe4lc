@@ -213,6 +213,15 @@ const elements = {
     yamlErrorMessage: document.getElementById('yaml-error-message'),
     saveYamlBtn: document.getElementById('save-yaml-btn'),
     cancelYamlBtn: document.getElementById('cancel-yaml-btn'),
+    
+    // レスポンス置き換え直接編集モーダル要素
+    responseReplacementsDirectEditModal: document.getElementById('response-replacements-direct-edit-modal'),
+    editResponseReplacementsDirectlyBtn: document.getElementById('edit-response-replacements-directly-btn'),
+    closeResponseReplacementsDirectEditModal: document.getElementById('close-response-replacements-direct-edit-modal'),
+    responseReplacementsYamlEditor: document.getElementById('response-replacements-yaml-editor'),
+    responseReplacementsYamlErrorMessage: document.getElementById('response-replacements-yaml-error-message'),
+    saveResponseReplacementsYamlBtn: document.getElementById('save-response-replacements-yaml-btn'),
+    cancelResponseReplacementsYamlBtn: document.getElementById('cancel-response-replacements-yaml-btn'),
     // ボタン
     gotoHistoryBtn: document.getElementById('goto-history-btn'),
     gotoSettingsBtn: document.getElementById('goto-settings-btn'),
@@ -2957,6 +2966,19 @@ const appLogic = {
         elements.directEditModal.addEventListener('click', (event) => {
             if (event.target === elements.directEditModal) {
                 this.closeDirectEditModal();
+            }
+        });
+
+        // レスポンス置き換え直接編集モーダルイベントリスナー
+        elements.editResponseReplacementsDirectlyBtn.addEventListener('click', () => this.openResponseReplacementsDirectEditModal());
+        elements.closeResponseReplacementsDirectEditModal.addEventListener('click', () => this.closeResponseReplacementsDirectEditModal());
+        elements.saveResponseReplacementsYamlBtn.addEventListener('click', () => this.saveResponseReplacementsYamlContent());
+        elements.cancelResponseReplacementsYamlBtn.addEventListener('click', () => this.closeResponseReplacementsDirectEditModal());
+        
+        // レスポンス置き換えモーダル外クリックで閉じる
+        elements.responseReplacementsDirectEditModal.addEventListener('click', (event) => {
+            if (event.target === elements.responseReplacementsDirectEditModal) {
+                this.closeResponseReplacementsDirectEditModal();
             }
         });
     },
@@ -5966,6 +5988,124 @@ const appLogic = {
             
             uiUtils.scrollToBottom();
         }
+    },
+
+    // レスポンス置き換え直接編集モーダルを開く
+    openResponseReplacementsDirectEditModal() {
+        // 現在のレスポンス置き換えデータをYAML形式に変換
+        const yamlContent = this.convertResponseReplacementsToYaml();
+        elements.responseReplacementsYamlEditor.value = yamlContent;
+        elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
+        elements.responseReplacementsDirectEditModal.classList.remove('hidden');
+    },
+
+    // レスポンス置き換え直接編集モーダルを閉じる
+    closeResponseReplacementsDirectEditModal() {
+        elements.responseReplacementsDirectEditModal.classList.add('hidden');
+        elements.responseReplacementsYamlEditor.value = '';
+        elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
+    },
+
+    // レスポンス置き換えデータをYAML形式に変換
+    convertResponseReplacementsToYaml() {
+        const replacements = state.responseReplacer ? state.responseReplacer.replacements : [];
+        if (replacements.length === 0) {
+            return `# レスポンス置き換え設定
+# 以下の形式で置き換えルールを追加してください
+# 各ルールは「---」で区切ります
+
+# 例: 「こんにちは」を「Hello」に置換
+# pattern: こんにちは
+# replacement: Hello
+
+# 例: 正規表現で「あ+」（1個以上の「あ」）を「あ」に置換
+# pattern: あ+
+# replacement: あ
+
+# 例: キャプチャグループを使用（「Mr. 名前」を「名前さん」に置換）
+# pattern: Mr\\. (\\w+)
+# replacement: $1さん
+
+`;
+        }
+
+        let yaml = '';
+        replacements.forEach((replacement, index) => {
+            if (index > 0) yaml += '\n---\n\n';
+            yaml += `pattern: ${replacement.pattern}\n`;
+            yaml += `replacement: ${replacement.replacement}`;
+        });
+
+        return yaml;
+    },
+
+    // レスポンス置き換えYAMLコンテンツを保存
+    async saveResponseReplacementsYamlContent() {
+        const yamlText = elements.responseReplacementsYamlEditor.value.trim();
+        
+        if (!yamlText) {
+            // 空の場合は全ての置き換えを削除
+            if (state.responseReplacer) {
+                state.responseReplacer.replacements = [];
+            }
+            await dbUtils.saveChat();
+            this.closeResponseReplacementsDirectEditModal();
+            this.renderResponseReplacementsList();
+            return;
+        }
+
+        try {
+            // js-yamlでパース（複数ドキュメント対応）
+            const parsedData = jsyaml.loadAll(yamlText);
+            
+            // 空のドキュメントをフィルタリング
+            const replacements = parsedData.filter(doc => doc && typeof doc === 'object');
+            
+            if (replacements.length === 0) {
+                throw new Error('有効な置き換えルールが見つかりません');
+            }
+            
+            this.updateResponseReplacementsFromYaml(replacements);
+
+            // エラーメッセージを非表示
+            elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
+            
+            // モーダルを閉じてリストを更新
+            this.closeResponseReplacementsDirectEditModal();
+            this.renderResponseReplacementsList();
+            
+        } catch (error) {
+            console.error('レスポンス置き換えYAMLパースエラー:', error);
+            // エラーメッセージを表示
+            elements.responseReplacementsYamlErrorMessage.textContent = `YAMLパースエラー: ${error.message}`;
+            elements.responseReplacementsYamlErrorMessage.classList.remove('hidden');
+        }
+    },
+
+    // YAMLデータからレスポンス置き換えを更新
+    updateResponseReplacementsFromYaml(yamlReplacements) {
+        if (!state.responseReplacer) return;
+        
+        // 既存の置き換えをクリア
+        state.responseReplacer.replacements = [];
+        
+        // YAMLデータから置き換えを追加
+        yamlReplacements.forEach(yamlReplacement => {
+            if (yamlReplacement.pattern) {
+                const replacement = yamlReplacement.replacement || '';
+                
+                // 正規表現の妥当性チェック
+                try {
+                    new RegExp(yamlReplacement.pattern);
+                    state.responseReplacer.addReplacement(yamlReplacement.pattern, replacement);
+                } catch (e) {
+                    console.warn('無効な正規表現をスキップ:', yamlReplacement.pattern);
+                }
+            }
+        });
+        
+        // チャットを保存
+        return dbUtils.saveChat();
     },
 
     // チャットをテキストファイルとしてエクスポート
