@@ -1238,6 +1238,28 @@ const uiUtils = {
 
         const messageData = skipStateUpdate ? undefined : state.currentMessages[index]; // メッセージデータを取得
         
+        // Safety Ratings用のクラスを追加
+        if (role === 'model' && messageData && messageData.safetyRatings) {
+            const sexuallyExplicitRating = messageData.safetyRatings.find(
+                rating => rating.category === 'HARM_CATEGORY_SEXUALLY_EXPLICIT'
+            );
+            
+            if (sexuallyExplicitRating) {
+                switch (sexuallyExplicitRating.probability) {
+                    case 'HIGH':
+                        messageDiv.classList.add('safety-high');
+                        break;
+                    case 'MEDIUM':
+                        messageDiv.classList.add('safety-medium');
+                        break;
+                    case 'LOW':
+                        messageDiv.classList.add('safety-low');
+                        break;
+                    // NEGLIGIBLE, UNSPECIFIED の場合はクラスを追加しない
+                }
+            }
+        }
+        
         // Thought Summary 表示エリア (モデル応答で thoughtSummary がある場合)
         if (role === 'model' && messageData && messageData.thoughtSummary) {
             const thoughtDetails = document.createElement('details');
