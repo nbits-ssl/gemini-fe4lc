@@ -64,8 +64,8 @@
                 <!-- 要素の順序変更: 戻るボタン -> タイトル -> インポートボタン -->
                 <button id="back-to-chat-from-history" class="header-button" aria-label="チャットへ戻る">＞</button>
                 <h1 id="history-title">履歴一覧</h1>
-                <button id="import-history-btn" class="header-save-button" title="履歴をインポート">インポート</button>
-                <input type="file" id="import-history-input" accept=".txt" class="hidden"> <!-- インポート用ファイル入力 -->
+                <button id="import-json-btn" class="header-save-button" title="チャットログ(JSON)をインポート - 完全なログを復元">ログ取り込み</button>
+                <input type="file" id="import-json-input" accept=".json" class="hidden"> <!-- ログインポート用ファイル入力 -->
             </header>
             <main class="main-content">
                 <ul id="history-list" class="history-list">
@@ -81,7 +81,8 @@
                             </div>
                             <div class="history-item-actions">
                                 <button class="js-edit-title-btn" title="タイトル編集">✎</button>
-                                <button class="js-export-btn" title="出力">出力</button>
+                                <button class="js-export-text-btn" title="テキスト出力 - テキストだけを再利用する用">テキスト出力</button>
+                                <button class="js-export-json-btn" title="ログ出力 - ログ(JSON)を完全保持、環境移行用">ログ出力</button>
                                 <button class="js-duplicate-btn" title="複製">複製</button>
                                 <button class="js-delete-btn" title="削除">削除</button>
                             </div>

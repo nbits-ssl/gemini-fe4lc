@@ -294,14 +294,19 @@ label {
 #history-screen .app-header #history-title {
     order: 2; /* タイトルを中央に */
 }
-#history-screen .app-header #import-history-btn {
+#history-screen .app-header #import-history-btn,
+#history-screen .app-header #import-json-btn {
     order: 3; /* インポートボタンを一番左に */
-    margin-right: 0; /* 右マージン削除 */
+    margin-right: 5px; /* ボタン間の間隔 */
+}
+#history-screen .app-header #import-json-btn {
+    order: 4; /* JSONボタンを2番目に */
+    margin-right: 0; /* 最後のボタンなので右マージン削除 */
 }
 
 .header-save-button {
-    padding: 4px 12px;
-    font-size: 13px;
+    padding: 4px 8px;
+    font-size: 12px;
     background-color: var(--bg-button-save);
     color: var(--text-light);
     border-radius: 5px;
@@ -309,6 +314,7 @@ label {
     cursor: pointer;
     transition: background-color 0.2s ease;
     flex-shrink: 0;
+    min-width: 50px;
 }
 .header-save-button:hover:not(:disabled) {
     background-color: var(--bg-button-save-hover);
@@ -1019,13 +1025,16 @@ body.dark-mode .token-display {
 }
 .history-item-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     flex-shrink: 0;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     cursor: default; /* ボタン以外はクリックを透過 */
 }
 .history-item-actions button {
     cursor: pointer;
+    font-size: 12px;
+    padding: 4px 6px;
+    min-width: 40px;
 }
 .history-item-actions .js-edit-title-btn {
     background-color: var(--bg-button-edit);
@@ -1037,8 +1046,10 @@ body.dark-mode .token-display {
 .history-item-actions .js-delete-btn:hover { background-color: var(--bg-button-delete-hover); }
 .history-item-actions .js-duplicate-btn { background-color: var(--bg-button-duplicate); }
 .history-item-actions .js-duplicate-btn:hover { background-color: var(--bg-button-duplicate-hover); }
-.history-item-actions .js-export-btn { background-color: var(--bg-button-export); }
-.history-item-actions .js-export-btn:hover { background-color: var(--bg-button-export-hover); }
+.history-item-actions .js-export-text-btn { background-color: var(--bg-button-export); }
+.history-item-actions .js-export-text-btn:hover { background-color: var(--bg-button-export-hover); }
+.history-item-actions .js-export-json-btn { background-color: var(--bg-button-save); }
+.history-item-actions .js-export-json-btn:hover { background-color: var(--bg-button-save-hover); }
 
 .js-history-item-template {
     display: none !important; /* テンプレートは非表示 */
