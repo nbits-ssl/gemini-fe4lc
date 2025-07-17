@@ -469,8 +469,20 @@
                          ※ サーバー側のhtmlファイルなどはブラウザにキャッシュされるため、<BR>
                          このボタンで明示的にサーバーがから再取得しない限り更新されない。
                      </p>
+                     
+                     <!-- データバックアップ・復元 -->
+                     <div style="text-align:center; margin: 20px 0;">
+                         <button id="backup-data-btn">データバックアップ</button>
+                     </div>
+                     
                      <details style="text-align:center;">
                          <summary style="cursor: pointer; font-weight: normal; font-size: 14px; color: var(--text-link); margin-bottom: 10px;">※取り扱い注意項目※</summary>
+                         <button id="restore-data-btn">バックアップから復元</button>
+                         <input type="file" id="restore-data-input" accept=".json" class="hidden">
+                         <p style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; margin-bottom: 10px;">
+                             ※ 全チャット履歴と設定（APIキー以外）をJSONファイルでバックアップ・復元。<BR>
+                             ※ 復元時は既存データが全て削除されます。
+                         </p>
                          <button id="clear-data-btn">全データクリア (履歴と設定)</button>
                          <p style="font-size: 11px; color: var(--text-secondary); margin-top:5px; margin-bottom: 10px;">
                              ※ ブラウザに保存されている設定や履歴を全て削除。<BR>

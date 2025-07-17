@@ -1124,6 +1124,21 @@ body.dark-mode .token-display {
 #clear-data-btn:hover {
     background-color: var(--bg-button-delete-hover);
 }
+
+/* データバックアップ・復元ボタン */
+#backup-data-btn {
+    background-color: var(--bg-button-export);
+    margin-bottom: 10px;
+}
+#backup-data-btn:hover {
+    background-color: var(--bg-button-export-hover);
+}
+#restore-data-btn {
+    background-color: var(--bg-button-action);
+}
+#restore-data-btn:hover {
+    background-color: var(--bg-button-action-hover);
+}
 .checkbox-label {
     display: flex;
     align-items: center;

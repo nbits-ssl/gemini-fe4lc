@@ -228,6 +228,11 @@ const elements = {
     updateAppBtn: document.getElementById('update-app-btn'),
     clearDataBtn: document.getElementById('clear-data-btn'),
     
+    // データバックアップ・復元ボタン
+    backupDataBtn: document.getElementById('backup-data-btn'),
+    restoreDataBtn: document.getElementById('restore-data-btn'),
+    restoreDataInput: document.getElementById('restore-data-input'),
+    
     importJsonBtn: document.getElementById('import-json-btn'), // JSON履歴インポートボタン
     importJsonInput: document.getElementById('import-json-input'), // JSONインポートファイル入力
     // カスタムダイアログ
@@ -979,131 +984,171 @@ const dbUtils = {
         }
     },
 
-    // チャットを完全なJSONファイルとしてエクスポート
-    async exportChatAsJSON(chatId, chatTitle) {
-        try {
-            const chat = await this.getChat(chatId);
-            if (!chat) {
-                await uiUtils.showCustomAlert("チャットデータが見つかりません。");
+    // チャットデータをJSON形式でエクスポート用に準備
+    async prepareChatForExport(chatId) {
+        const chat = await this.getChat(chatId);
+        if (!chat) {
+            throw new Error("チャットデータが見つかりません。");
+        }
+
+        return {
+            version: "1.0",
+            exportDate: new Date().toISOString(),
+            appVersion: APP_VERSION,
+            fe4lcVersion: FE4LC_APP_VERSION,
+            chat: {
+                id: chat.id,
+                title: chat.title,
+                createdAt: chat.createdAt,
+                updatedAt: chat.updatedAt,
+                systemPrompt: chat.systemPrompt || '',
+                messages: chat.messages || [],
+                compressedSummary: chat.compressedSummary || null,
+                lastSentRequest: chat.lastSentRequest || null,
+                responseReplacements: chat.responseReplacements || [],
+                contextNotes: chat.contextNotes || []
+            }
+        };
+    },
+
+    // 全データをJSON形式でエクスポート用に準備
+    async prepareAllDataForExport() {
+        // 全チャットデータを取得
+        const allChats = await this.getAllChats();
+        
+        // 全設定を取得（APIキー以外）
+        const allSettings = await this.loadSettings();
+        const exportSettings = { ...allSettings };
+        delete exportSettings.apiKey; // APIキーは除外
+        
+        return {
+            version: "1.0",
+            exportDate: new Date().toISOString(),
+            appVersion: APP_VERSION,
+            fe4lcVersion: FE4LC_APP_VERSION,
+            dataType: "full_backup",
+            chats: allChats,
+            settings: exportSettings
+        };
+    },
+
+    // JSONデータをファイルとしてダウンロード
+    downloadJSONFile(data, filename) {
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    // JSONファイルを読み込んでパース
+    parseJSONFile(file) {
+        return new Promise((resolve, reject) => {
+            if (!file || !file.name.endsWith('.json')) {
+                reject(new Error("JSONファイル (.json) を選択してください。"));
                 return;
             }
 
-            // エクスポート用の完全なデータ構造を作成
-            const exportData = {
-                version: "1.0",
-                exportDate: new Date().toISOString(),
-                appVersion: APP_VERSION,
-                fe4lcVersion: FE4LC_APP_VERSION,
-                chat: {
-                    id: chat.id,
-                    title: chat.title,
-                    createdAt: chat.createdAt,
-                    updatedAt: chat.updatedAt,
-                    systemPrompt: chat.systemPrompt || '',
-                    messages: chat.messages || [],
-                    compressedSummary: chat.compressedSummary || null,
-                    lastSentRequest: chat.lastSentRequest || null,
-                    responseReplacements: chat.responseReplacements || [],
-                    contextNotes: chat.contextNotes || []
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const jsonContent = event.target.result;
+                    if (!jsonContent) {
+                        reject(new Error("ファイルの内容が空です。"));
+                        return;
+                    }
+                    const parsedData = JSON.parse(jsonContent);
+                    resolve(parsedData);
+                } catch (error) {
+                    reject(new Error(`JSONファイルのパースに失敗しました: ${error.message}`));
                 }
             };
-
-            // JSONを整形してBlobを作成
-            const jsonString = JSON.stringify(exportData, null, 2);
-            const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            
-            // ファイル名を生成 (不正文字を置換)
-            const safeTitle = (chatTitle || `chat_${chatId}_export`).replace(/[<>:"/\\|?*\s]/g, '_');
-            a.href = url;
-            a.download = `${safeTitle}_complete.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            console.log("チャット完全エクスポート完了:", chatId);
-        } catch (error) {
-            console.error("エクスポートエラー:", error);
-            await uiUtils.showCustomAlert(`エクスポートエラー: ${error}`);
-        }
+            reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました。"));
+            reader.readAsText(file);
+        });
     },
 
-    // JSONファイルからチャットを完全復元
-    async importChatFromJson(file) {
-        if (!file || !file.name.endsWith('.json')) {
-            await uiUtils.showCustomAlert("JSONファイル (.json) を選択してください。");
-            return;
+    // チャットデータをDBに保存
+    async saveChatData(chatData) {
+        const newChatData = {
+            title: chatData.title,
+            createdAt: chatData.createdAt,
+            updatedAt: chatData.updatedAt,
+            systemPrompt: chatData.systemPrompt || '',
+            messages: chatData.messages || [],
+            compressedSummary: chatData.compressedSummary || null,
+            lastSentRequest: chatData.lastSentRequest || null,
+            responseReplacements: chatData.responseReplacements || [],
+            contextNotes: chatData.contextNotes || []
+        };
+
+        return new Promise((resolve, reject) => {
+            const store = this._getStore(CHATS_STORE, 'readwrite');
+            const request = store.add(newChatData);
+            request.onsuccess = (event) => resolve(event.target.result);
+            request.onerror = (event) => reject(event.target.error);
+        });
+    },
+
+    // チャットデータをインポート用に検証
+    validateChatImportData(importData) {
+        if (!importData.version || !importData.chat) {
+            throw new Error("無効なJSONファイルです。正しいチャットエクスポートファイルを選択してください。");
         }
 
-        console.log("JSONチャットインポート開始:", file.name);
-        const reader = new FileReader();
+        const chatData = importData.chat;
+        if (!chatData.title || !chatData.createdAt || !chatData.updatedAt) {
+            throw new Error("チャットデータが不完全です。正しいエクスポートファイルを選択してください。");
+        }
 
-        reader.onload = async (event) => {
-            try {
-                const jsonContent = event.target.result;
-                if (!jsonContent) {
-                    await uiUtils.showCustomAlert("ファイルの内容が空です。");
-                    return;
+        return chatData;
+    },
+
+    // 全データインポート用に検証
+    validateAllDataImportData(importData) {
+        if (!importData.version || !importData.dataType || importData.dataType !== "full_backup") {
+            throw new Error("無効なJSONファイルです。正しいバックアップファイルを選択してください。");
+        }
+        return importData;
+    },
+
+    // 全データを復元
+    async restoreAllDataFromImport(importData) {
+        // 既存データをクリア
+        await this.clearAllData();
+        
+        // チャットデータを復元
+        let restoredChatCount = 0;
+        if (importData.chats && Array.isArray(importData.chats)) {
+            for (const chatData of importData.chats) {
+                try {
+                    await this.saveChatData(chatData);
+                    restoredChatCount++;
+                } catch (error) {
+                    console.warn("チャット復元エラー:", chatData.title, error);
                 }
-
-                const importData = JSON.parse(jsonContent);
-                
-                // バージョンチェック
-                if (!importData.version || !importData.chat) {
-                    await uiUtils.showCustomAlert("無効なJSONファイルです。正しいチャットエクスポートファイルを選択してください。");
-                    return;
-                }
-
-                const chatData = importData.chat;
-                
-                // 必須フィールドのチェック
-                if (!chatData.title || !chatData.createdAt || !chatData.updatedAt) {
-                    await uiUtils.showCustomAlert("チャットデータが不完全です。正しいエクスポートファイルを選択してください。");
-                    return;
-                }
-
-                // 新しいチャットデータを作成（IDは自動生成）
-                const newChatData = {
-                    title: chatData.title,
-                    createdAt: chatData.createdAt,
-                    updatedAt: chatData.updatedAt,
-                    systemPrompt: chatData.systemPrompt || '',
-                    messages: chatData.messages || [],
-                    compressedSummary: chatData.compressedSummary || null,
-                    lastSentRequest: chatData.lastSentRequest || null,
-                    responseReplacements: chatData.responseReplacements || [],
-                    contextNotes: chatData.contextNotes || []
-                };
-
-                // 新しいチャットとしてDBに追加
-                const newChatId = await new Promise((resolve, reject) => {
-                    const store = dbUtils._getStore(CHATS_STORE, 'readwrite');
-                    const request = store.add(newChatData);
-                    request.onsuccess = (event) => resolve(event.target.result);
-                    request.onerror = (event) => reject(event.target.error);
-                });
-
-                console.log("JSONチャットインポート成功:", newChatId);
-                await uiUtils.showCustomAlert(`チャット「${newChatData.title}」を完全に復元しました。\n\nインポート日時: ${new Date().toLocaleString()}\n元の作成日時: ${new Date(chatData.createdAt).toLocaleString()}`);
-                
-                // 履歴リストを再描画
-                uiUtils.renderHistoryList();
-
-            } catch (error) {
-                console.error("JSONインポート処理エラー:", error);
-                await uiUtils.showCustomAlert(`JSONファイルのインポート中にエラーが発生しました: ${error.message}`);
             }
-        };
+        }
+        
+        // 設定データを復元（APIキー以外）
+        if (importData.settings && typeof importData.settings === 'object') {
+            for (const [key, value] of Object.entries(importData.settings)) {
+                if (key !== 'apiKey') { // APIキーは復元しない
+                    await this.saveSetting(key, value);
+                }
+            }
+        }
 
-        reader.onerror = async (event) => {
-            console.error("ファイル読み込みエラー:", event.target.error);
-            await uiUtils.showCustomAlert("ファイルの読み込みに失敗しました。");
-        };
+        return { success: true, chatCount: restoredChatCount };
+    },
 
-        reader.readAsText(file);
-    }
+
 };
 
 // --- UIユーティリティ (uiUtils) ---
@@ -2746,6 +2791,15 @@ const appLogic = {
         });
         elements.updateAppBtn.addEventListener('click', () => this.updateApp());
         elements.clearDataBtn.addEventListener('click', () => this.confirmClearAllData());
+        
+        // データバックアップ・復元アクション
+        elements.backupDataBtn.addEventListener('click', () => this.backupAllData());
+        elements.restoreDataBtn.addEventListener('click', () => this.restoreAllData());
+        elements.restoreDataInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) this.handleRestoreFile(file);
+            event.target.value = null; // 同じファイルを選択できるようにリセット
+        });
 
         // ダークモード切り替えリスナー
         elements.darkModeToggle.addEventListener('change', () => {
@@ -5921,12 +5975,101 @@ const appLogic = {
 
     // チャットを完全なJSONファイルとしてエクスポート
     async exportChatAsJSON(chatId, chatTitle) {
-        return await dbUtils.exportChatAsJSON(chatId, chatTitle);
+        try {
+            const exportData = await dbUtils.prepareChatForExport(chatId);
+            const safeTitle = (chatTitle || `chat_${chatId}_export`).replace(/[<>:"/\\|?*\s]/g, '_');
+            const filename = `${safeTitle}_complete.json`;
+            
+            dbUtils.downloadJSONFile(exportData, filename);
+            console.log("チャット完全エクスポート完了:", chatId);
+        } catch (error) {
+            console.error("エクスポートエラー:", error);
+            await uiUtils.showCustomAlert(`エクスポートエラー: ${error.message}`);
+        }
     },
 
     // JSONファイルからチャットを完全復元
     async importChatFromJson(file) {
-        return await dbUtils.importChatFromJson(file);
+        try {
+            console.log("JSONチャットインポート開始:", file.name);
+            
+            const importData = await dbUtils.parseJSONFile(file);
+            const chatData = dbUtils.validateChatImportData(importData);
+            
+            const newChatId = await dbUtils.saveChatData(chatData);
+            
+            console.log("JSONチャットインポート成功:", newChatId);
+            await uiUtils.showCustomAlert(`チャット「${chatData.title}」を完全に復元しました。\n\nインポート日時: ${new Date().toLocaleString()}\n元の作成日時: ${new Date(chatData.createdAt).toLocaleString()}`);
+            
+            // 履歴リストを再描画
+            uiUtils.renderHistoryList();
+            
+        } catch (error) {
+            console.error("JSONインポート処理エラー:", error);
+            await uiUtils.showCustomAlert(`JSONファイルのインポート中にエラーが発生しました: ${error.message}`);
+        }
+    },
+
+    // 全データをバックアップ
+    async backupAllData() {
+        try {
+            const exportData = await dbUtils.prepareAllDataForExport();
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `${DB_NAME.toLowerCase()}_backup_${timestamp}.json`;
+            
+            dbUtils.downloadJSONFile(exportData, filename);
+            console.log("全データバックアップ完了:", exportData.chats.length, "チャット");
+        } catch (error) {
+            console.error("バックアップエラー:", error);
+            await uiUtils.showCustomAlert(`バックアップ中にエラーが発生しました: ${error.message}`);
+        }
+    },
+
+    // バックアップから全データを復元
+    async restoreAllData() {
+        try {
+            // 復元確認
+            const confirmed = await uiUtils.showCustomConfirm(
+                "バックアップから復元しますか？\n\n" +
+                "※ 既存の全データ（チャット履歴と設定）が削除されます\n" +
+                "※ この操作は取り消せません\n" +
+                "※ APIキーは復元されません"
+            );
+            
+            if (!confirmed) return;
+
+            // ファイル選択を促す
+            elements.restoreDataInput.click();
+        } catch (error) {
+            console.error("復元エラー:", error);
+            await uiUtils.showCustomAlert(`復元中にエラーが発生しました: ${error.message}`);
+        }
+    },
+
+    // 復元ファイル処理
+    async handleRestoreFile(file) {
+        try {
+            console.log("全データ復元開始:", file.name);
+            
+            const importData = await dbUtils.parseJSONFile(file);
+            dbUtils.validateAllDataImportData(importData);
+            const result = await dbUtils.restoreAllDataFromImport(importData);
+            
+            console.log("全データ復元成功:", result.chatCount, "チャット");
+            
+            await uiUtils.showCustomAlert(
+                `データ復元が完了しました。\n\n` +
+                `復元したチャット数: ${result.chatCount}件\n\n` +
+                `※ ページを再読み込みして設定を反映してください。`
+            );
+            
+            // 設定画面を閉じてチャット画面に戻る
+            uiUtils.showScreen('chat');
+            
+        } catch (error) {
+            console.error("復元ファイル処理エラー:", error);
+            await uiUtils.showCustomAlert(`復元中にエラーが発生しました: ${error.message}`);
+        }
     }
 
 }; // appLogic終了
