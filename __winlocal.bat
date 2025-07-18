@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 public class EasyFaceHTTPServer {
     public static void Main(string[] args) {
-        var URL = "http://localhost:8072/";// ※ポート番号を変えたいならここを編集※
+        var URL = "http://localhost:8074/";// ※ポート番号を変えたいならここを編集※
         var listener = new HttpListener();
         listener.Prefixes.Add(URL);
         listener.Start();
