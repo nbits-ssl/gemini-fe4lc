@@ -39,6 +39,8 @@ fork元のオリジナルGemini PWA Clientの作者さまといくつかのア�
 
 元アプリ「Gemini PWA Client」のREADMEを`README.original.md`として同梱していますのでそちらを参照してください。
 
+https://nbits-ssl.github.io/gemini-fe4lc/ で公開しています。
+
 
 ## 新規機能
 
