@@ -163,19 +163,29 @@ const compressionUtils = {
 
     // 圧縮用のメッセージ配列を構築
     buildCompressionMessages(middleMessages, compressionPrompt) {
-        // 中間メッセージを通常の会話形式で構築
+        const ret = [];
+        
+        // 中間メッセージを通常の会話形式で構築して追加
         const conversationMessages = middleMessages.map(msg => ({
             role: msg.role,
             parts: [{ text: msg.content }]
         }));
+        ret.push(...conversationMessages);
 
-        // 最後に圧縮指示メッセージを追加
+        // 圧縮指示メッセージを追加
         const compressionMessage = {
             role: 'user',
             parts: [{ text: compressionPrompt }]
         };
+        ret.push(compressionMessage);
 
-        return [...conversationMessages, compressionMessage];
+        // ダミーモデルプロンプトが有効な場合は最後に追加
+        const dummyModelText = state.settings.enableDummyModel && state.settings.dummyModel?.trim();
+        if (dummyModelText) {
+            ret.push({ role: 'model', parts: [{ text: dummyModelText }] });
+        }
+
+        return ret;
     },
 
     // API用のメッセージ配列を構築（圧縮対応）
@@ -230,7 +240,8 @@ const compressionUtils = {
             return;
         }
 
-        // 既存の圧縮があれば削除
+        // 既存の圧縮データをバックアップ（失敗時の復元用）
+        const originalCompressedSummary = state.compressedSummary ? { ...state.compressedSummary } : null;
         if (state.compressedSummary) {
             console.log('既存の圧縮を削除して新規圧縮を実行');
             delete state.compressedSummary;
@@ -394,6 +405,12 @@ const compressionUtils = {
                 } else {
                     console.error('圧縮API応答に有効なコンテンツがありません');
                     
+                    // 既存の圧縮データを復元
+                    if (originalCompressedSummary) {
+                        console.log('圧縮失敗のため、既存の圧縮データを復元します');
+                        state.compressedSummary = originalCompressedSummary;
+                    }
+                    
                     // finishReasonを取得してエラーメッセージに含める
                     let errorMessage = '圧縮処理に失敗しました。API応答に有効なコンテンツがありません。';
                     
@@ -410,6 +427,13 @@ const compressionUtils = {
             }
         } catch (error) {
             console.error('圧縮処理中にエラーが発生しました:', error);
+            
+            // 既存の圧縮データを復元
+            if (originalCompressedSummary) {
+                console.log('圧縮失敗のため、既存の圧縮データを復元します');
+                state.compressedSummary = originalCompressedSummary;
+            }
+            
             // エラーメッセージを表示（一時的な表示のみ）
             uiUtils.appendMessage('assistant', `圧縮処理中にエラーが発生しました: ${error.message}`, -1, false, null, null, true);
             uiUtils.scrollToBottom();

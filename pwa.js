@@ -24,6 +24,7 @@ const LIGHT_THEME_COLOR = '#4a90e2';
 const DARK_THEME_COLOR = '#007aff';
 const APP_VERSION = "0.26"; // Thought summaries対応、streamingのバグ修正
 const FE4LC_APP_VERSION = "202507a"; 
+const APP_NAME = "Gemini FE4LC";
 const SWIPE_THRESHOLD = 50; // スワイプ判定の閾値 (px)
 const ZOOM_THRESHOLD = 1.01; // ズーム状態と判定するスケールの閾値 (誤差考慮)
 const OMISSION_TEXT = '...[省略]...'; // 省略表示用テキスト
@@ -1760,7 +1761,7 @@ const uiUtils = {
         // 表示用タイトル (既存チャットならプレフィックス追加)
         const displayTitle = isNewChat ? titleText : `: ${titleText}`;
         elements.chatTitle.textContent = displayTitle;
-        document.title = `GeminiPWA - ${titleText}`; // ブラウザタブのタイトルも更新
+        document.title = `${APP_NAME} - ${titleText}`; // ブラウザタブのタイトルも更新
     },
 
     // タイムスタンプをフォーマット
