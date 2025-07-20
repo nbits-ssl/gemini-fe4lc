@@ -41,6 +41,8 @@ fork元のオリジナルGemini PWA Clientの作者さまといくつかのア�
 
 https://nbits-ssl.github.io/gemini-fe4lc/ で公開しています。
 
+コンテキスト圧縮ボタン以外の主要機能は、入力欄左の「チャット情報」のメモのアイコンからアクセスできます。
+
 
 ## 新規機能
 
