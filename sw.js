@@ -13,7 +13,7 @@ const urlsToCache = [
   './manifest.json',
   // アイコンファイルもキャッシュする場合 (manifest.json で指定したもの)
   './icon-192x192.png',
-  './gemini-Icon.png',
+  './gemini-li.png',
 ];
 
 // インストール時にキャッシュを作成
