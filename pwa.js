@@ -253,6 +253,10 @@ const elements = {
     confirmMessage: document.getElementById('confirmDialog').querySelector('.dialog-message'),
     confirmOkBtn: document.getElementById('confirmDialog').querySelector('.dialog-ok-btn'),
     confirmCancelBtn: document.getElementById('confirmDialog').querySelector('.dialog-cancel-btn'),
+    yesNoDialog: document.getElementById('yesNoDialog'),
+    yesNoMessage: document.getElementById('yesNoDialog').querySelector('.dialog-message'),
+    yesNoYesBtn: document.getElementById('yesNoDialog').querySelector('.dialog-ok-btn'),
+    yesNoNoBtn: document.getElementById('yesNoDialog').querySelector('.dialog-cancel-btn'),
     promptDialog: document.getElementById('promptDialog'),
     promptMessage: document.getElementById('promptDialog').querySelector('.dialog-message'),
     promptInput: document.getElementById('promptDialog').querySelector('.dialog-input'),
@@ -717,10 +721,16 @@ const dbUtils = {
     // チャットを保存 (タイトル指定可)
     async saveChat(optionalTitle = null) {
         await this.openDB();
-        // メッセージもシステムプロンプトもない場合は保存しない
-        if ((!state.currentMessages || state.currentMessages.length === 0) && !state.currentSystemPrompt) {
-            if(state.currentChatId) console.log(`saveChat: 既存チャット ${state.currentChatId} にメッセージもシステムプロンプトもないため保存せず`);
-            else console.log("saveChat: 新規チャットに保存するメッセージもシステムプロンプトもなし");
+        // メッセージもシステムプロンプトもコンテキストノートもレスポンス置き換えもない場合は保存しない
+        const hasContextNotes = state.contextNote && state.contextNote.getAllNotes().length > 1; // デフォルト仕様以外
+        const hasResponseReplacements = state.responseReplacer && state.responseReplacer.getReplacements().length > 0;
+        
+        if ((!state.currentMessages || state.currentMessages.length === 0) && 
+            !state.currentSystemPrompt && 
+            !hasContextNotes && 
+            !hasResponseReplacements) {
+            if(state.currentChatId) console.log(`saveChat: 既存チャット ${state.currentChatId} に保存する内容がないため保存せず`);
+            else console.log("saveChat: 新規チャットに保存する内容がないため保存せず");
             return Promise.resolve(state.currentChatId); // 現在のIDを返す
         }
 
@@ -786,7 +796,7 @@ const dbUtils = {
                     if (!state.currentChatId && savedId) { // 新規保存でIDが確定したらstateに反映
                         state.currentChatId = savedId;
                     }
-                    console.log(`チャット ${state.currentChatId ? '更新' : '保存'} 完了 ID:`, state.currentChatId || savedId);
+                    console.log(`チャット ${state.currentChatId ? '更新' : '保存'} 完了 ID:`, state.currentChatId || savedId, 'タイトル:', chatData.title);
                     // 保存したチャットが現在表示中のものなら、タイトルをUIに反映
                     if ((state.currentChatId || savedId) === (chatIdForOperation || savedId)) {
                         uiUtils.updateChatTitle(chatData.title);
@@ -2168,6 +2178,23 @@ const uiUtils = {
         const result = await this.showCustomDialog(elements.confirmDialog, elements.confirmOkBtn);
         return result === 'ok'; // OKが押されたか
     },
+
+    // はい・いいえダイアログ表示
+    async showCustomYesNo(message) {
+        elements.yesNoMessage.textContent = message;
+            // ボタンのイベントリスナーが重複しないように複製して置き換え
+            const newYesBtn = elements.yesNoYesBtn.cloneNode(true);
+            elements.yesNoYesBtn.parentNode.replaceChild(newYesBtn, elements.yesNoYesBtn);
+            elements.yesNoYesBtn = newYesBtn;
+            const newNoBtn = elements.yesNoNoBtn.cloneNode(true);
+            elements.yesNoNoBtn.parentNode.replaceChild(newNoBtn, elements.yesNoNoBtn);
+            elements.yesNoNoBtn = newNoBtn;
+
+        elements.yesNoYesBtn.onclick = () => elements.yesNoDialog.close('yes');
+        elements.yesNoNoBtn.onclick = () => elements.yesNoDialog.close('no');
+        const result = await this.showCustomDialog(elements.yesNoDialog, elements.yesNoYesBtn);
+        return result === 'yes'; // はいが押されたか
+    },
     // プロンプトダイアログ表示
     async showCustomPrompt(message, defaultValue = '') {
         elements.promptMessage.textContent = message;
@@ -2774,9 +2801,7 @@ const appLogic = {
 
         // チャットアクション
         elements.newChatBtn.addEventListener('click', async () => {
-            // 現在のチャットを保存するか確認
-            const confirmed = await uiUtils.showCustomConfirm("現在のチャットを保存して新規チャットを開始しますか？");
-            if (confirmed) this.confirmStartNewChat();
+            this.confirmStartNewChat();
         });
 
         elements.sendButton.addEventListener('click', () => {
@@ -3129,6 +3154,7 @@ const appLogic = {
 
     // 新規チャット開始の確認と実行
     async confirmStartNewChat() {
+        console.log('confirmStartNewChat: メソッド開始');
         // 送信中なら中断確認
         if (state.isSending) {
             const confirmed = await uiUtils.showCustomConfirm("送信中です。中断して新規チャットを開始しますか？");
@@ -3160,21 +3186,46 @@ const appLogic = {
         // 現在のチャットにメッセージまたはシステムプロンプトがあり、IDもあれば保存を試みる
         if ((state.currentMessages.length > 0 || state.currentSystemPrompt) && state.currentChatId) {
             try {
+                console.log('confirmStartNewChat: 既存チャット保存開始');
                 await dbUtils.saveChat();
+                console.log('confirmStartNewChat: 既存チャット保存完了');
             } catch (error) {
                 console.error("新規チャット開始前のチャット保存失敗:", error);
                 const conf = await uiUtils.showCustomConfirm("現在のチャットの保存に失敗しました。新規チャットを開始しますか？");
                 if (!conf) return; // 保存失敗時にキャンセルされたら中断
             }
         }
-        // 新規チャットを開始
-        this.startNewChat();
-        uiUtils.showScreen('chat'); // チャット画面を表示 (URLハッシュも更新)
+
+        // コンテキストノートとレスポンス置き換えの設定を引き継ぐか確認
+        const hasContextNotes = state.contextNote && state.contextNote.getAllNotes().length > 1; // デフォルト仕様以外
+        const hasResponseReplacements = state.responseReplacer && state.responseReplacer.getReplacements().length > 0;
+        
+        if (hasContextNotes || hasResponseReplacements) {
+            console.log('confirmStartNewChat: 設定あり, hasContextNotes:', hasContextNotes, 'hasResponseReplacements:', hasResponseReplacements);
+            const confirmed = await uiUtils.showCustomYesNo("このチャットのコンテキストノートとレスポンス置き換えの設定を引き継ぎますか？");
+            console.log('confirmStartNewChat: ダイアログ結果:', confirmed);
+            if (confirmed) {
+                console.log('confirmStartNewChat: startNewChatWithSettingsを呼び出し');
+                // 設定を引き継いで新規チャットを開始
+                await this.startNewChatWithSettings();
+            } else {
+                console.log('confirmStartNewChat: startNewChatを呼び出し');
+                // 通常の新規チャットを開始
+                this.startNewChat();
+            }
+        } else {
+            console.log('confirmStartNewChat: 設定なし, startNewChatを呼び出し');
+            // 設定がない場合は通常の新規チャットを開始
+            this.startNewChat();
+        }
+        uiUtils.showScreen('chat');
     },
 
     // 新規チャットを開始する (状態リセット)
     startNewChat() {
+        console.log('startNewChat: 開始, 現在のID:', state.currentChatId);
         state.currentChatId = null; // IDリセット
+        console.log('startNewChat: IDリセット後:', state.currentChatId);
         state.currentMessages = []; // メッセージクリア
         state.currentSystemPrompt = state.settings.systemPrompt; // デフォルトのシステムプロンプトを適用
         state.compressedSummary = null; // 圧縮データをリセット
@@ -3200,6 +3251,44 @@ const appLogic = {
         if (typeof updateCompressButtonText === 'function') {
             updateCompressButtonText();
         }
+    },
+
+    // 設定を引き継いで新規チャットを開始する
+    async startNewChatWithSettings() {
+        console.log('startNewChatWithSettings: 開始, 現在のID:', state.currentChatId);
+        // 現在の設定を深い複製でバックアップ
+        const currentContextNotes = state.contextNote ? 
+            JSON.parse(JSON.stringify(state.contextNote.getAllNotes())) : [];
+        const currentResponseReplacements = state.responseReplacer ? 
+            JSON.parse(JSON.stringify(state.responseReplacer.getReplacements())) : [];
+        
+        // 通常の新規チャット処理を実行
+        console.log('startNewChatWithSettings: startNewChat()呼び出し前, ID:', state.currentChatId);
+        this.startNewChat();
+        console.log('startNewChatWithSettings: startNewChat()呼び出し後, ID:', state.currentChatId);
+        
+        // コンテキストノートを引き継ぎ
+        if (currentContextNotes.length > 1) {
+            // デフォルトのコンテキストノートを削除
+            state.contextNote.clearNotes();
+            
+            // 全てのノートを引き継ぎ（デフォルト仕様も含む）
+            currentContextNotes.forEach(note => {
+                state.contextNote.addNote(note.type, note.title, note.content, note.keywords, note.category);
+            });
+        }
+        
+        // レスポンス置き換えを引き継ぎ
+        if (currentResponseReplacements.length > 0) {
+            console.log('引き継ぎ前のレスポンス置き換え:', currentResponseReplacements);
+            currentResponseReplacements.forEach(replacement => {
+                console.log('追加するreplacement:', replacement);
+                console.log('pattern:', replacement.pattern, 'replacement:', replacement.replacement);
+                state.responseReplacer.addReplacement(replacement.pattern, replacement.replacement);
+            });
+        }
+        
+        console.log('startNewChatWithSettings: メソッド終了');
     },
 
     // 指定IDのチャットを読み込む
