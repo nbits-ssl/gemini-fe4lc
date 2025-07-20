@@ -7,6 +7,7 @@ const CHAT_UPDATEDAT_INDEX = 'updatedAtIndex';
 const CHAT_CREATEDAT_INDEX = 'createdAtIndex';
 const DEFAULT_MODEL = 'gemini-2.0-flash';
 const DEFAULT_STREAMING_SPEED = 12;
+const DEFAULT_STREAMING_OUTPUT = false;
 const DEFAULT_TEMPERATURE = 0.5;
 const DEFAULT_MAX_TOKENS = 4000;
 const DEFAULT_TOP_K = 40;
@@ -281,7 +282,7 @@ const state = {
     settings: { // デフォルト値
         apiKey: '',
         modelName: DEFAULT_MODEL,
-        streamingOutput: true,
+        streamingOutput: DEFAULT_STREAMING_OUTPUT,
         streamingSpeed: DEFAULT_STREAMING_SPEED,
         systemPrompt: '', // デフォルトのシステムプロンプト
         temperature: null,
@@ -4501,8 +4502,8 @@ const appLogic = {
                 state.settings = { // 初期デフォルト値に戻す
                     apiKey: '',
                     modelName: DEFAULT_MODEL,
-                    streamingOutput: true,
-                    streamingSpeed: DEFAULT_STREAMING_SPEED,
+                            streamingOutput: DEFAULT_STREAMING_OUTPUT,
+        streamingSpeed: DEFAULT_STREAMING_SPEED,
                     systemPrompt: '', // デフォルトSPもリセット
                     temperature: null,
                     maxTokens: null,
