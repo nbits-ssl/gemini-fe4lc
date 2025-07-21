@@ -21,8 +21,18 @@
                 <button id="new-chat-btn" class="new-chat-button" title="新規チャットを開始">新規</button>
                 <button id="compress-context-btn" class="compress-button" title="コンテキスト圧縮">圧縮</button>
                 <button id="clear-compression-btn" class="compress-button" title="圧縮破棄" style="display: none;">🗑️</button>
-                <button id="scroll-to-top-btn" class="header-button" aria-label="最上部へ移動" title="最上部へ移動">🔼</button>
-                <button id="scroll-to-bottom-btn" class="header-button" aria-label="最下部へ移動" title="最下部へ移動">🔽</button>
+                <!-- 一番下へボタン -->
+                <button id="scroll-to-bottom-btn" class="scroll-to-bottom-btn" style="display:none;" aria-label="一番下へ">
+  <span class="scroll-arrow-svg-bg">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16" class="scroll-arrow-svg"><path fill-rule="evenodd" d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8.5 4.5a.5.5 0 0 0-1 0v5.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293z"/></svg>
+  </span>
+</button>
+                <!-- 一番上へボタン -->
+                <button id="scroll-to-top-btn" class="scroll-to-top-btn" style="display:none;" aria-label="一番上へ">
+  <span class="scroll-arrow-svg-bg">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16" class="scroll-arrow-svg"><path fill-rule="evenodd" d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-7.5 3.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707z"/></svg>
+  </span>
+</button>
                 <button id="goto-settings-btn" class="header-button" aria-label="設定へ">⚙</button>
             </header>
             <main class="main-content">

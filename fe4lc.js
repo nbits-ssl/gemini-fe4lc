@@ -78,8 +78,27 @@ const tokenUtils = {
 // スクロール機能の要素を取得
 const scrollElements = {
     scrollToTopBtn: document.getElementById('scroll-to-top-btn'),
-    scrollToBottomBtn: document.getElementById('scroll-to-bottom-btn')
+    scrollToBottomBtn: document.getElementById('scroll-to-bottom-btn'),
+    mainContent: document.querySelector('#chat-screen .main-content')
 };
+
+// スクロール位置に応じて上下ボタンの表示を切り替える
+function updateScrollButtonsVisibility() {
+    if (!scrollElements.mainContent || !scrollElements.scrollToTopBtn || !scrollElements.scrollToBottomBtn) return;
+    const el = scrollElements.mainContent;
+    // 最上部判定
+    if (el.scrollTop > 0) {
+        scrollElements.scrollToTopBtn.style.display = '';
+    } else {
+        scrollElements.scrollToTopBtn.style.display = 'none';
+    }
+    // 最下部判定
+    if (el.scrollTop + el.clientHeight < el.scrollHeight - 1) {
+        scrollElements.scrollToBottomBtn.style.display = '';
+    } else {
+        scrollElements.scrollToBottomBtn.style.display = 'none';
+    }
+}
 
 // 圧縮機能
 const compressionUtils = {
@@ -656,6 +675,12 @@ function setupEventListeners() {
     }
     if (scrollElements.scrollToBottomBtn) {
         scrollElements.scrollToBottomBtn.addEventListener('click', () => scrollUtils.scrollToBottom());
+    }
+    // main-contentのスクロールでボタン表示切り替え
+    if (scrollElements.mainContent) {
+        scrollElements.mainContent.addEventListener('scroll', updateScrollButtonsVisibility);
+        // 初期表示も一度実行
+        updateScrollButtonsVisibility();
     }
 
     // 圧縮ボタン

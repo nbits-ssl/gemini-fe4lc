@@ -2914,3 +2914,88 @@ body.dark-mode .yaml-editor:focus {
     box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
 }
 
+.scroll-to-bottom-btn,
+.scroll-to-top-btn {
+  position: fixed;
+  left: 50%;
+  z-index: 1000;
+  background: none;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+}
+
+.scroll-to-bottom-btn {
+  bottom: calc(32px + 32px); /* 32px + 入力欄の高さ */
+  transform: translateX(-50%);
+}
+
+.scroll-to-top-btn {
+  top: calc(32px + 24px); /* 32px + ヘッダーの高さ */
+  transform: translateX(-50%);
+}
+
+.scroll-to-bottom-btn .circle,
+.scroll-to-top-btn .circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.scroll-to-bottom-btn .arrow,
+.scroll-to-top-btn .arrow {
+  font-size: 2rem;
+  color: #4a90e2;
+}
+
+.scroll-arrow-svg {
+  display: block;
+  margin: 0 auto;
+  background: rgba(255,255,255,0.95);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+  transition: background 0.2s;
+}
+body.dark-mode .scroll-arrow-svg {
+  background: rgba(32,32,32,0.95);
+}
+
+.scroll-arrow-svg-bg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  padding: 0;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.scroll-to-bottom-btn:hover .scroll-arrow-svg-bg,
+.scroll-to-top-btn:hover .scroll-arrow-svg-bg {
+  opacity: 1.0;
+}
+body.dark-mode .scroll-arrow-svg-bg {
+  background: rgba(32,32,32,0.95);
+}
+.scroll-arrow-svg {
+  width: 100%;
+  height: 100%;
+  color: var(--bg-button-retry);
+  display: block;
+}
+body.dark-mode .scroll-arrow-svg {
+  color: var(--bg-button-retry);
+}
+
