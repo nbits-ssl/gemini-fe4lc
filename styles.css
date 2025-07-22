@@ -3016,6 +3016,11 @@ body.dark-mode .scroll-arrow-svg {
     flex-direction: column;
     overflow-y: auto;
   }
+  .tab-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-bottom: 10px;
+  }
   .modal-body {
     flex: 1 1 auto;
     overflow-y: auto;
