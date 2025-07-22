@@ -2824,7 +2824,6 @@ const appLogic = {
         }
     },
 
-
     // --- スワイプ処理 (ズーム対応) ---
     handleTouchStart(event) {
         if (!state.settings.enableSwipeNavigation) return;
@@ -2924,7 +2923,6 @@ const appLogic = {
 
     // 新規チャット開始の確認と実行
     async confirmStartNewChat() {
-        console.log('confirmStartNewChat: メソッド開始');
         // 送信中なら中断確認
         if (state.isSending) {
             const confirmed = await uiUtils.showCustomConfirm("送信中です。中断して新規チャットを開始しますか？");
@@ -2956,9 +2954,7 @@ const appLogic = {
         // 現在のチャットにメッセージまたはシステムプロンプトがあり、IDもあれば保存を試みる
         if ((state.currentMessages.length > 0 || state.currentSystemPrompt) && state.currentChatId) {
             try {
-                console.log('confirmStartNewChat: 既存チャット保存開始');
                 await dbUtils.saveChat();
-                console.log('confirmStartNewChat: 既存チャット保存完了');
             } catch (error) {
                 console.error("新規チャット開始前のチャット保存失敗:", error);
                 const conf = await uiUtils.showCustomConfirm("現在のチャットの保存に失敗しました。新規チャットを開始しますか？");
@@ -2971,21 +2967,14 @@ const appLogic = {
         const hasResponseReplacements = state.responseReplacer && state.responseReplacer.getReplacements().length > 0;
         
         if (hasContextNotes || hasResponseReplacements) {
-            console.log('confirmStartNewChat: 設定あり, hasContextNotes:', hasContextNotes, 'hasResponseReplacements:', hasResponseReplacements);
             const confirmed = await uiUtils.showCustomYesNo("このチャットのコンテキストノートとレスポンス置き換えの設定を引き継ぎますか？");
-            console.log('confirmStartNewChat: ダイアログ結果:', confirmed);
-            if (confirmed) {
-                console.log('confirmStartNewChat: startNewChatWithSettingsを呼び出し');
-                // 設定を引き継いで新規チャットを開始
+
+			if (confirmed) {
                 await this.startNewChatWithSettings();
             } else {
-                console.log('confirmStartNewChat: startNewChatを呼び出し');
-                // 通常の新規チャットを開始
                 this.startNewChat();
             }
         } else {
-            console.log('confirmStartNewChat: 設定なし, startNewChatを呼び出し');
-            // 設定がない場合は通常の新規チャットを開始
             this.startNewChat();
         }
         uiUtils.showScreen('chat');
@@ -2995,20 +2984,15 @@ const appLogic = {
     startNewChat() {
         console.log('startNewChat: 開始, 現在のID:', state.currentChatId);
         state.currentChatId = null; // IDリセット
-        console.log('startNewChat: IDリセット後:', state.currentChatId);
         state.currentMessages = []; // メッセージクリア
         state.currentSystemPrompt = state.settings.systemPrompt; // デフォルトのシステムプロンプトを適用
         state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
         
-        // ResponseReplacerを初期化
         state.responseReplacer = new ResponseReplacer();
-        
-        // ContextNoteを初期化
         state.contextNote = new ContextNote();
         
-        // 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
         this.addDefaultContextNoteSpec();
         
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
@@ -3017,6 +3001,7 @@ const appLogic = {
         elements.userInput.value = ''; // 入力欄クリア
         uiUtils.adjustTextareaHeight(); // 高さ調整
         uiUtils.setSendingState(false); // 送信状態リセット
+
         // 圧縮ボタンのテキストを更新
         if (typeof updateCompressButtonText === 'function') {
             updateCompressButtonText();
@@ -3026,23 +3011,19 @@ const appLogic = {
     // 設定を引き継いで新規チャットを開始する
     async startNewChatWithSettings() {
         console.log('startNewChatWithSettings: 開始, 現在のID:', state.currentChatId);
+
         // 現在の設定を深い複製でバックアップ
         const currentContextNotes = state.contextNote ? 
             JSON.parse(JSON.stringify(state.contextNote.getAllNotes())) : [];
         const currentResponseReplacements = state.responseReplacer ? 
             JSON.parse(JSON.stringify(state.responseReplacer.getReplacements())) : [];
         
-        // 通常の新規チャット処理を実行
-        console.log('startNewChatWithSettings: startNewChat()呼び出し前, ID:', state.currentChatId);
         this.startNewChat();
-        console.log('startNewChatWithSettings: startNewChat()呼び出し後, ID:', state.currentChatId);
         
         // コンテキストノートを引き継ぎ
         if (currentContextNotes.length > 1) {
-            // デフォルトのコンテキストノートを削除
             state.contextNote.clearNotes();
             
-            // 全てのノートを引き継ぎ（デフォルト仕様も含む）
             currentContextNotes.forEach(note => {
                 state.contextNote.addNote(note.type, note.title, note.content, note.keywords, note.category);
             });
@@ -3050,15 +3031,10 @@ const appLogic = {
         
         // レスポンス置き換えを引き継ぎ
         if (currentResponseReplacements.length > 0) {
-            console.log('引き継ぎ前のレスポンス置き換え:', currentResponseReplacements);
-            currentResponseReplacements.forEach(replacement => {
-                console.log('追加するreplacement:', replacement);
-                console.log('pattern:', replacement.pattern, 'replacement:', replacement.replacement);
+			currentResponseReplacements.forEach(replacement => {
                 state.responseReplacer.addReplacement(replacement.pattern, replacement.replacement);
             });
         }
-        
-        console.log('startNewChatWithSettings: メソッド終了');
     },
 
     // 指定IDのチャットを読み込む
@@ -3889,7 +3865,7 @@ const appLogic = {
         }
     },
 
-	
+
     // --- 背景画像ハンドラ ---
         // 背景画像アップロード処理
         async handleBackgroundImageUpload(file) {
