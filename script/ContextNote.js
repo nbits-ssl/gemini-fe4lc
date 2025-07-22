@@ -2,6 +2,45 @@
  * ContextNote - コンテキストノート管理クラス
  * キーワードマッチングやランダム選択で動的にAIに情報を提供する機能
  */
+const DEFAULT_SPEC = {
+    title: "コンテキストノート仕様",
+    type: "keyword",
+    content: `コンテキストノートは、AIとの対話中に動的に情報を提供する機能です。
+
+【ノートの種類】
+1. キーワードタイプ（keyword）: キーワードマッチングでのみ提供される
+2. モーメントタイプ（moment）: ランダム選択で提供される（キーワードマッチングも可能）
+
+【ノートの構造】
+- title: ノートのタイトル（必須）
+- type: "keyword" または "moment"（必須）
+- content: ノートの内容（必須、1行目がサマリーとして扱われる）
+- keywords: カンマ区切りのキーワード（キーワードタイプ用、空の場合はタイトルがキーワードとして扱われる）
+- category: カテゴリ（空欄可、カテゴリ別にグループ化して表示される）
+
+【使用方法】
+- キーワードタイプは、会話中にキーワードが含まれた時に自動的に提供される
+- モーメントタイプは、設定された確率でランダムに選ばれるが、キーワードマッチングでも提供される
+- 各ノートの1行目は、タイトルと合わせてサマリーとして常時提供される
+- カテゴリを設定すると、サマリー表示時にカテゴリ別にグループ化される
+
+【効果的な使い方】
+- キャラクター設定、世界観、重要な情報をキーワードタイプで設定
+- 過去の会話の記憶や感情的な想い出をモーメントタイプで設定
+- モーメントタイプでもキーワードを設定することで、関連する話題で自動的に思い出される
+- キーワードは具体的で検索しやすい単語を選ぶ
+- 内容は簡潔で分かりやすく記述する
+- カテゴリを使って関連するノートをグループ化し、AIの理解を助ける
+
+【YAML直接編集】
+- ノート設定画面の「直接編集」ボタンでYAML形式での一括編集が可能
+- YAML形式では改行が保持され、複数行の内容を自然に記述できる
+- 各コンテキストノートは「---」で区切られる
+- 複数のノートを一度に編集・追加・削除できる`,
+    keywords: ["コンテキストノート"],
+    category: ""
+};
+
 class ContextNote {
     constructor(data = null) {
         this.notes = []; // ノートの配列
@@ -445,42 +484,67 @@ class ContextNote {
         }
     }
 
-    static DEFAULT_SPEC = {
-        title: "コンテキストノート仕様",
-        type: "keyword",
-        content: `コンテキストノートは、AIとの対話中に動的に情報を提供する機能です。
+    updateFromYamlArray(yamlNotes) {
+        // 既存のノートをクリア
+        this.clearNotes();
+        // YAMLデータからノートを追加
+        yamlNotes.forEach(yamlNote => {
+            if (yamlNote.title && yamlNote.type && yamlNote.content) {
+                const keywords = yamlNote.keywords ?
+                    yamlNote.keywords.split(',').map(k => k.trim()).filter(k => k) :
+                    [];
+                const category = yamlNote.category || '';
+                this.addNote(
+                    yamlNote.type,
+                    yamlNote.title,
+                    yamlNote.content,
+                    keywords,
+                    category
+                );
+            }
+        });
+    }
 
-【ノートの種類】
-1. キーワードタイプ（keyword）: キーワードマッチングでのみ提供される
-2. モーメントタイプ（moment）: ランダム選択で提供される（キーワードマッチングも可能）
+    convertToYAML() {
+        const notes = this.getAllNotes();
+        if (notes.length === 0) {
+            // DEFAULT_SPECをYAML例として出力
+            return `# コンテキストノート設定
+# 以下の形式でノートを追加してください
+# 各ノートは「---」で区切ります
 
-【ノートの構造】
-- title: ノートのタイトル（必須）
-- type: "keyword" または "moment"（必須）
-- content: ノートの内容（必須、1行目がサマリーとして扱われる）
-- keywords: カンマ区切りのキーワード（キーワードタイプ用、空の場合はタイトルがキーワードとして扱われる）
-- category: カテゴリ（空欄可、カテゴリ別にグループ化して表示される）
+# 例:
+title: ${DEFAULT_SPEC.title}
+type: ${DEFAULT_SPEC.type}
+keywords: ${DEFAULT_SPEC.keywords.join(', ')}
+category: ${DEFAULT_SPEC.category}
+content: |
+ ${DEFAULT_SPEC.content.replace(/\n/g, '\n ')}
+`;
+        }
+        let yaml = '';
+        notes.forEach((note, index) => {
+            if (index > 0) yaml += '\n---\n\n';
+            yaml += `title: ${note.title}\n`;
+            yaml += `type: ${note.type}\n`;
+            if (note.keywords && note.keywords.length > 0) {
+                yaml += `keywords: ${note.keywords.join(', ')}\n`;
+            }
+            if (note.category && note.category.trim() !== '') {
+                yaml += `category: ${note.category}\n`;
+            }
+            yaml += `content: |\n ${note.content.replace(/\n/g, '\n ')}`;
+        });
+        return yaml;
+    }
 
-【使用方法】
-- キーワードタイプは、会話中にキーワードが含まれた時に自動的に提供される
-- モーメントタイプは、設定された確率でランダムに選ばれるが、キーワードマッチングでも提供される
-- 各ノートの1行目は、タイトルと合わせてサマリーとして常時提供される
-- カテゴリを設定すると、サマリー表示時にカテゴリ別にグループ化される
-
-【効果的な使い方】
-- キャラクター設定、世界観、重要な情報をキーワードタイプで設定
-- 過去の会話の記憶や感情的な想い出をモーメントタイプで設定
-- モーメントタイプでもキーワードを設定することで、関連する話題で自動的に思い出される
-- キーワードは具体的で検索しやすい単語を選ぶ
-- 内容は簡潔で分かりやすく記述する
-- カテゴリを使って関連するノートをグループ化し、AIの理解を助ける
-
-【YAML直接編集】
-- ノート設定画面の「直接編集」ボタンでYAML形式での一括編集が可能
-- YAML形式では改行が保持され、複数行の内容を自然に記述できる
-- 各コンテキストノートは「---」で区切られる
-- 複数のノートを一度に編集・追加・削除できる`,
-        keywords: ["コンテキストノート"],
-        category: ""
-    };
+    addDefaultSpec() {
+        this.addNote(
+            DEFAULT_SPEC.type,
+            DEFAULT_SPEC.title,
+            DEFAULT_SPEC.content,
+            DEFAULT_SPEC.keywords,
+            DEFAULT_SPEC.category
+        );
+    }
 } 

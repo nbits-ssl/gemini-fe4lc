@@ -5616,7 +5616,7 @@ const appLogic = {
     // 直接編集モーダルを開く
     openDirectEditModal() {
         // 現在のContextNoteデータをYAML形式に変換
-        const yamlContent = this.convertContextNotesToYaml();
+        const yamlContent = state.contextNote.convertToYaml();
         elements.yamlEditor.value = yamlContent;
         elements.yamlErrorMessage.classList.add('hidden');
         elements.directEditModal.classList.remove('hidden');
@@ -5627,30 +5627,6 @@ const appLogic = {
         elements.directEditModal.classList.add('hidden');
         elements.yamlEditor.value = '';
         elements.yamlErrorMessage.classList.add('hidden');
-    },
-
-    // ContextNoteデータをYAML形式に変換
-    convertContextNotesToYaml() {
-        const notes = state.contextNote.getAllNotes();
-        if (notes.length === 0) {
-            return '# コンテキストノート\n# 以下の形式でノートを追加してください\n\n';
-        }
-
-        let yaml = '';
-        notes.forEach((note, index) => {
-            if (index > 0) yaml += '\n---\n\n';
-            yaml += `title: ${note.title}\n`;
-            yaml += `type: ${note.type}\n`;
-            if (note.keywords && note.keywords.length > 0) {
-                yaml += `keywords: ${note.keywords.join(', ')}\n`;
-            }
-            if (note.category && note.category.trim() !== '') {
-                yaml += `category: ${note.category}\n`;
-            }
-            yaml += `content: |\n ${note.content.replace(/\n/g, '\n ')}`;
-        });
-
-        return yaml;
     },
 
     // YAMLコンテンツを保存
@@ -5678,6 +5654,7 @@ const appLogic = {
             }
             
             this.updateContextNotesFromYaml(notes);
+			dbUtils.saveChat();
 
             // エラーメッセージを非表示
             elements.yamlErrorMessage.classList.add('hidden');
@@ -5694,45 +5671,11 @@ const appLogic = {
         }
     },
 
-    // YAMLデータからContextNoteを更新
-    updateContextNotesFromYaml(yamlNotes) {
-        // 既存のノートをクリア
-        state.contextNote.clearNotes();
-        
-        // YAMLデータからノートを追加
-        yamlNotes.forEach(yamlNote => {
-            if (yamlNote.title && yamlNote.type && yamlNote.content) {
-                const keywords = yamlNote.keywords ? 
-                    yamlNote.keywords.split(',').map(k => k.trim()).filter(k => k) : 
-                    [];
-                const category = yamlNote.category || '';
-                
-                state.contextNote.addNote(
-                    yamlNote.type,
-                    yamlNote.title,
-                    yamlNote.content,
-                    keywords,
-                    category
-                );
-            }
-        });
-        
-        // チャットを保存
-        return dbUtils.saveChat();
-    },
-
     // デフォルトのコンテキストノート仕様を追加
     addDefaultContextNoteSpec() {
-        state.contextNote.addNote(
-            ContextNote.DEFAULT_SPEC.type,
-            ContextNote.DEFAULT_SPEC.title,
-            ContextNote.DEFAULT_SPEC.content,
-            ContextNote.DEFAULT_SPEC.keywords,
-            ContextNote.DEFAULT_SPEC.category
-        );
+		state.contextNote.addDefaultSpec();
 
-        // チャットを保存
-        dbUtils.saveChat().catch(error => console.error('デフォルトコンテキストノート保存エラー:', error));
+		dbUtils.saveChat().catch(error => console.error('デフォルトコンテキストノート保存エラー:', error));
     },
 
     // ContextNoteシステムメッセージを表示・更新
@@ -5784,7 +5727,7 @@ const appLogic = {
     // レスポンス置き換え直接編集モーダルを開く
     openResponseReplacementsDirectEditModal() {
         // 現在のレスポンス置き換えデータをYAML形式に変換
-        const yamlContent = this.convertResponseReplacementsToYaml();
+        const yamlContent = state.responseReplacer.convertToYAML();
         elements.responseReplacementsYamlEditor.value = yamlContent;
         elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
         elements.responseReplacementsDirectEditModal.classList.remove('hidden');
@@ -5797,39 +5740,6 @@ const appLogic = {
         elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
     },
 
-    // レスポンス置き換えデータをYAML形式に変換
-    convertResponseReplacementsToYaml() {
-        const replacements = state.responseReplacer ? state.responseReplacer.replacements : [];
-        if (replacements.length === 0) {
-            return `# レスポンス置き換え設定
-# 以下の形式で置き換えルールを追加してください
-# 各ルールは「---」で区切ります
-
-# 例: 「こんにちは」を「Hello」に置換
-# pattern: こんにちは
-# replacement: Hello
-
-# 例: 正規表現で「あ+」（1個以上の「あ」）を「あ」に置換
-# pattern: あ+
-# replacement: あ
-
-# 例: キャプチャグループを使用（「Mr. 名前」を「名前さん」に置換）
-# pattern: Mr\\. (\\w+)
-# replacement: $1さん
-
-`;
-        }
-
-        let yaml = '';
-        replacements.forEach((replacement, index) => {
-            if (index > 0) yaml += '\n---\n\n';
-            yaml += `pattern: ${replacement.pattern}\n`;
-            yaml += `replacement: ${replacement.replacement}`;
-        });
-
-        return yaml;
-    },
-
     // レスポンス置き換えYAMLコンテンツを保存
     async saveResponseReplacementsYamlContent() {
         const yamlText = elements.responseReplacementsYamlEditor.value.trim();
@@ -5837,7 +5747,7 @@ const appLogic = {
         if (!yamlText) {
             // 空の場合は全ての置き換えを削除
             if (state.responseReplacer) {
-                state.responseReplacer.replacements = [];
+                state.responseReplacer.clear();
             }
             await dbUtils.saveChat();
             this.closeResponseReplacementsDirectEditModal();
@@ -5856,7 +5766,8 @@ const appLogic = {
                 throw new Error('有効な置き換えルールが見つかりません');
             }
             
-            this.updateResponseReplacementsFromYaml(replacements);
+			state.responseReplacer.updateFromYamlArray(replacements);
+            dbUtils.saveChat();
 
             // エラーメッセージを非表示
             elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
@@ -5871,32 +5782,6 @@ const appLogic = {
             elements.responseReplacementsYamlErrorMessage.textContent = `YAMLパースエラー: ${error.message}`;
             elements.responseReplacementsYamlErrorMessage.classList.remove('hidden');
         }
-    },
-
-    // YAMLデータからレスポンス置き換えを更新
-    updateResponseReplacementsFromYaml(yamlReplacements) {
-        if (!state.responseReplacer) return;
-        
-        // 既存の置き換えをクリア
-        state.responseReplacer.replacements = [];
-        
-        // YAMLデータから置き換えを追加
-        yamlReplacements.forEach(yamlReplacement => {
-            if (yamlReplacement.pattern) {
-                const replacement = yamlReplacement.replacement || '';
-                
-                // 正規表現の妥当性チェック
-                try {
-                    new RegExp(yamlReplacement.pattern);
-                    state.responseReplacer.addReplacement(yamlReplacement.pattern, replacement);
-                } catch (e) {
-                    console.warn('無効な正規表現をスキップ:', yamlReplacement.pattern);
-                }
-            }
-        });
-        
-        // チャットを保存
-        return dbUtils.saveChat();
     },
 
     // チャットをテキストファイルとしてエクスポート

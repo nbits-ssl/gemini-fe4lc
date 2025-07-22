@@ -1,5 +1,23 @@
 // ResponseReplacer.js - 正規表現置き換え機能
 
+const DEFAULT_YAML = `# レスポンス置き換え設定
+# 以下の形式で置き換えルールを追加してください
+# 各ルールは「---」で区切ります
+
+# 例: 「こんにちは」を「Hello」に置換
+# pattern: こんにちは
+# replacement: Hello
+
+# 例: 正規表現で「あ+」（1個以上の「あ」）を「あ」に置換
+# pattern: あ+
+# replacement: あ
+
+# 例: キャプチャグループを使用（「Mr. 名前」を「名前さん」に置換）
+# pattern: Mr\\. (\\w+)
+# replacement: $1さん
+
+`;
+
 class ResponseReplacer {
     constructor(data = null) {
         this.replacements = []; // 置き換えペアの配列
@@ -119,5 +137,29 @@ class ResponseReplacer {
         if (Array.isArray(data)) {
             this.setReplacements(data);
         }
+    }
+
+    updateFromYamlArray(yamlArray) {
+        // YAMLデータから置換ルールをセット
+        const replacements = yamlArray
+            .filter(item => item && typeof item === 'object' && item.pattern !== undefined)
+            .map(item => ({
+                pattern: item.pattern || '',
+                replacement: item.replacement || ''
+            }));
+        this.setReplacements(replacements);
+    }
+
+    convertToYAML() {
+        if (!this.replacements || this.replacements.length === 0) {
+            return DEFAULT_YAML;
+        }
+        let yaml = '';
+        this.replacements.forEach((rep, index) => {
+            if (index > 0) yaml += '\n---\n\n';
+            yaml += `pattern: ${rep.pattern}\n`;
+            yaml += `replacement: ${rep.replacement ?? ''}\n`;
+        });
+        return yaml;
     }
 }
