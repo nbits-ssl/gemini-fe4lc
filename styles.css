@@ -2086,7 +2086,7 @@ body.dark-mode .responding-spinner {
 
 .replacement-input {
     flex: 1;
-    min-width: 200px;
+    min-width: 80px;
     padding: 6px 12px;
     border: 1px solid var(--border-secondary);
     border-radius: 4px;
@@ -2997,5 +2997,51 @@ body.dark-mode .scroll-arrow-svg-bg {
 }
 body.dark-mode .scroll-arrow-svg {
   color: var(--bg-button-retry);
+}
+
+@media (max-width: 600px) {
+  .modal-content.large-modal {
+    width: 98vw;
+    height: 95vh;
+    max-width: 98vw;
+    max-height: 98vh;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .yaml-editor-container {
+    flex: 1 1 auto;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .yaml-editor {
+    flex: 1 1 auto;
+    min-height: 200px;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px;
+    font-size: 15px;
+    height: 100%;
+    resize: vertical;
+  }
+  .modal-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-primary);
+    z-index: 2;
+    padding: 10px 10px;
+    flex-shrink: 0;
+  }
 }
 

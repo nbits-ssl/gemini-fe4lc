@@ -91,8 +91,8 @@
                             </div>
                             <div class="history-item-actions">
                                 <button class="js-edit-title-btn" title="タイトル編集">✎</button>
-                                <button class="js-export-text-btn" title="テキスト出力 - テキストだけを再利用する用">テキスト出力</button>
-                                <button class="js-export-json-btn" title="ログ出力 - ログ(JSON)を完全保持、環境移行用">ログ出力</button>
+                                <button class="js-export-text-btn" title="テキスト出力 - テキストだけを再利用する用">TXT</button>
+                                <button class="js-export-json-btn" title="ログ出力 - ログ(JSON)を完全保持、環境移行用">JSON</button>
                                 <button class="js-duplicate-btn" title="複製">複製</button>
                                 <button class="js-delete-btn" title="削除">削除</button>
                             </div>
@@ -112,10 +112,10 @@
             <main class="main-content">
                 <!-- タブナビゲーション -->
                 <div class="tab-navigation">
-                    <button class="tab-button active" data-tab="prompt">最終プロンプト</button>
+                    <button class="tab-button active" data-tab="prompt">最終送信</button>
                     <button class="tab-button" data-tab="compression-status">圧縮情報</button>
-                    <button class="tab-button" data-tab="context-notes">ノート設定</button>
-                    <button class="tab-button" data-tab="response-replacements">レスポンス置換</button>
+                    <button class="tab-button" data-tab="context-notes">ノート</button>
+                    <button class="tab-button" data-tab="response-replacements">返信置換</button>
                 </div>
                 
                 <!-- プロンプトタブ -->
@@ -138,7 +138,7 @@
                 <div id="response-replacements-tab" class="tab-content">
                     <div class="response-replacements-container">
                         <div class="response-replacements-header">
-                            <h3>レスポンス置換設定</h3>
+                            <h3>レスポンス置換</h3>
                             <div class="header-actions">
                                 <button id="edit-response-replacements-directly-btn" class="action-button secondary">直接編集</button>
                                 <button id="add-response-replacement-btn" class="action-button">追加</button>
@@ -163,7 +163,7 @@
                 <div id="context-notes-tab" class="tab-content">
                     <div class="response-replacements-container">
                         <div class="response-replacements-header">
-                            <h3>コンテキストノート設定</h3>
+                            <h3>コンテキストノート</h3>
                             <div class="header-actions">
                                 <button id="edit-context-notes-directly-btn" class="action-button secondary">直接編集</button>
                                 <button id="add-context-note-btn" class="action-button">追加</button>
@@ -349,13 +349,13 @@
                             <input type="number" id="context-note-random-frequency" step="0.1" min="0" max="1" placeholder="0.3" aria-label="ランダム選択の確率">
                         </div>
                         <div>
-                            <label for="context-note-random-count">ランダム選択するノートの数:</label>
-                            <input type="number" id="context-note-random-count" step="1" min="1" placeholder="1" aria-label="ランダム選択するノートの数">
+                            <label for="context-note-random-count">ランダム選択する数:</label>
+                            <input type="number" id="context-note-random-count" step="1" min="1" placeholder="1" aria-label="ランダム選択する数">
                         </div>
                     </div>
                     <div class="param-grid">
                         <div>
-                            <label for="context-note-message-count">対象メッセージ数・最新からN件:</label>
+                            <label for="context-note-message-count">対象メッセージ数:</label>
                             <input type="number" id="context-note-message-count" step="1" min="1" placeholder="6" aria-label="対象メッセージ数">
                         </div>
                         <div>
