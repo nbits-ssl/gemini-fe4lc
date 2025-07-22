@@ -81,6 +81,70 @@ class AppConfig {
         }
     }
 
+    validate(settingsObj) {
+        const defaults = AppConfig.DEFAULTS;
+        const cleaned = { ...defaults };
+        for (const key in settingsObj) {
+            if (!(key in defaults)) continue;
+            const loadedValue = settingsObj[key];
+            const defaultValue = defaults[key];
+            if (key === 'backgroundImageBlob') {
+                cleaned[key] = (loadedValue instanceof Blob) ? loadedValue : null;
+            } else if (key === 'hideSystemPromptInChat' || key === 'enableGrounding' || key === 'enableSwipeNavigation' || key === 'debugVirtualSend' || key === 'compressionMode') {
+                cleaned[key] = loadedValue === true;
+            } else if (key === 'debugVirtualResponse') {
+                cleaned[key] = typeof loadedValue === 'string' ? loadedValue : '';
+            } else if (key === 'contextNoteRandomFrequency') {
+                const num = parseFloat(loadedValue);
+                cleaned[key] = (isNaN(num) || num < 0 || num > 1) ? defaults.contextNoteRandomFrequency : num;
+            } else if (key === 'contextNoteRandomCount') {
+                const num = parseInt(loadedValue, 10);
+                cleaned[key] = (isNaN(num) || num < 1) ? defaults.contextNoteRandomCount : num;
+            } else if (key === 'contextNoteMessageCount') {
+                const num = parseInt(loadedValue, 10);
+                cleaned[key] = (isNaN(num) || num < 1) ? defaults.contextNoteMessageCount : num;
+            } else if (key === 'contextNoteMaxChars') {
+                const num = parseInt(loadedValue, 10);
+                cleaned[key] = (isNaN(num) || num < 100) ? defaults.contextNoteMaxChars : num;
+            } else if (key === 'contextNoteInsertionPriority') {
+                const num = parseInt(loadedValue, 10);
+                cleaned[key] = (isNaN(num) || num < 1 || num > 10) ? defaults.contextNoteInsertionPriority : num;
+            } else if (key === 'darkMode' || key === 'streamingOutput' || key === 'pseudoStreaming' || key === 'enterToSend' || key === 'concatDummyModel' || key === 'enableDummyUser' || key === 'enableDummyModel' || key === 'includeThoughts') {
+                cleaned[key] = loadedValue === true;
+            } else if (key === 'thinkingBudget') {
+                const num = parseInt(loadedValue, 10);
+                cleaned[key] = (isNaN(num) || num < 0) ? null : num;
+            } else if (typeof defaultValue === 'number' || defaultValue === null) {
+                let num;
+                if (key === 'temperature' || key === 'topP' || key === 'presencePenalty' || key === 'frequencyPenalty') {
+                    num = parseFloat(loadedValue);
+                } else {
+                    num = parseInt(loadedValue, 10);
+                }
+                if (isNaN(num)) {
+                    if ((key === 'temperature' || key === 'maxTokens' || key === 'topK' || key === 'topP' || key === 'presencePenalty' || key === 'frequencyPenalty') && (loadedValue === null || loadedValue === '')) {
+                        cleaned[key] = null;
+                    } else {
+                        cleaned[key] = defaultValue;
+                    }
+                } else {
+                    if (key === 'temperature' && (num < 0 || num > 2)) num = defaultValue;
+                    if (key === 'maxTokens' && num < 1) num = defaultValue;
+                    if (key === 'topK' && num < 1) num = defaultValue;
+                    if (key === 'topP' && (num < 0 || num > 1)) num = defaultValue;
+                    if (key === 'streamingSpeed' && num < 0) num = defaultValue;
+                    if ((key === 'presencePenalty' || key === 'frequencyPenalty') && (num < -2.0 || num > 2.0)) num = defaultValue;
+                    cleaned[key] = num;
+                }
+            } else if (typeof defaultValue === 'string') {
+                cleaned[key] = typeof loadedValue === 'string' ? loadedValue : defaultValue;
+            } else {
+                cleaned[key] = loadedValue;
+            }
+        }
+        return cleaned;
+    }
+
     async load() {
         if (!this.dbAdapter) throw new Error('dbAdapterがセットされていません');
         await this.dbAdapter.open();
@@ -94,9 +158,8 @@ class AppConfig {
                     settingsArray.forEach(item => {
                         loadedSettings[item.key] = item.value;
                     });
-                    Object.entries(loadedSettings).forEach(([key, value]) => {
-                        this.set(key, value);
-                    });
+                    // バリデーションしてから反映
+                    this.config = this.validate(loadedSettings);
                     resolve();
                 };
                 request.onerror = (event) => reject(event.target.error);

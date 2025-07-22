@@ -5,17 +5,6 @@ const SETTINGS_STORE = 'settings';
 const CHATS_STORE = 'chats';
 const CHAT_UPDATEDAT_INDEX = 'updatedAtIndex';
 const CHAT_CREATEDAT_INDEX = 'createdAtIndex';
-const DEFAULT_MODEL = 'gemini-2.0-flash';
-const DEFAULT_STREAMING_SPEED = 12;
-const DEFAULT_STREAMING_OUTPUT = false;
-const DEFAULT_TEMPERATURE = 0.5;
-const DEFAULT_MAX_TOKENS = 4000;
-const DEFAULT_TOP_K = 40;
-const DEFAULT_TOP_P = 0.95;
-const DEFAULT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'; // デフォルトフォント
-const DEFAULT_COMPRESSION_PROMPT = 'これまでのやり取りで起こった事実関係とその時の登場人物の振る舞いを文字数を気にしないでできるかぎり詳細にまとめて。要約データとして扱うので、既存のフォーマットは無視。Markdownにもせずに、小説の「あらすじ」として通用するような形で。応答の返事は要らないからすぐに出力開始して。';
-const DEFAULT_KEEP_FIRST_MESSAGES = 5;
-const DEFAULT_KEEP_LAST_MESSAGES = 20;
 const CHAT_TITLE_LENGTH = 15;
 const TEXTAREA_MAX_HEIGHT = 120;
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
@@ -32,55 +21,9 @@ const OMISSION_TEXT = '...[省略]...'; // 省略表示用テキスト
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 最大ファイルサイズ (例: 10MB)
 const MAX_TOTAL_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 1メッセージあたりの合計添付ファイルサイズ上限 (例: 50MB) - API制限も考慮
 
-// ContextNote設定のデフォルト値
-const DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY = 0.3; // ランダム選択の確率（0.0-1.0）
-const DEFAULT_CONTEXT_NOTE_RANDOM_COUNT = 1; // ランダム選択するノートの数
-const DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT = 6; // 対象メッセージ数（user+model合わせて）
-const DEFAULT_CONTEXT_NOTE_MAX_CHARS = 5000; // 対象文字列の最大文字数
-const DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY = 2; // マッチング結果の挿入優先度（1-5）
 const CONTEXT_NOTE_ROLE = 'contextmessage';
 const REFERENCE_TAG_START = '<reference>';
 const REFERENCE_TAG_END = '</reference>';
-
-// デフォルトのコンテキストノート仕様
-const DEFAULT_CONTEXT_NOTE_SPEC = {
-    title: "コンテキストノート仕様",
-    type: "keyword",
-    content: `コンテキストノートは、AIとの対話中に動的に情報を提供する機能です。
-
-【ノートの種類】
-1. キーワードタイプ（keyword）: キーワードマッチングでのみ提供される
-2. モーメントタイプ（moment）: ランダム選択で提供される（キーワードマッチングも可能）
-
-【ノートの構造】
-- title: ノートのタイトル（必須）
-- type: "keyword" または "moment"（必須）
-- content: ノートの内容（必須、1行目がサマリーとして扱われる）
-- keywords: カンマ区切りのキーワード（キーワードタイプ用、空の場合はタイトルがキーワードとして扱われる）
-- category: カテゴリ（空欄可、カテゴリ別にグループ化して表示される）
-
-【使用方法】
-- キーワードタイプは、会話中にキーワードが含まれた時に自動的に提供される
-- モーメントタイプは、設定された確率でランダムに選ばれるが、キーワードマッチングでも提供される
-- 各ノートの1行目は、タイトルと合わせてサマリーとして常時提供される
-- カテゴリを設定すると、サマリー表示時にカテゴリ別にグループ化される
-
-【効果的な使い方】
-- キャラクター設定、世界観、重要な情報をキーワードタイプで設定
-- 過去の会話の記憶や感情的な想い出をモーメントタイプで設定
-- モーメントタイプでもキーワードを設定することで、関連する話題で自動的に思い出される
-- キーワードは具体的で検索しやすい単語を選ぶ
-- 内容は簡潔で分かりやすく記述する
-- カテゴリを使って関連するノートをグループ化し、AIの理解を助ける
-
-【YAML直接編集】
-- ノート設定画面の「直接編集」ボタンでYAML形式での一括編集が可能
-- YAML形式では改行が保持され、複数行の内容を自然に記述できる
-- 各コンテキストノートは「---」で区切られる
-- 複数のノートを一度に編集・追加・削除できる`,
-    keywords: ["コンテキストノート"],
-    category: ""
-};
 
 // 添付を確定する処理
 const extensionToMimeTypeMap = {
@@ -273,55 +216,16 @@ const elements = {
     cancelAttachBtn: document.getElementById('cancel-attach-btn'),
 };
 
+const dbAdapter = new IndexedDBAdapter(DB_NAME, DB_VERSION);
+const appConfig = new AppConfig({}, dbAdapter, SETTINGS_STORE);
+
 // --- アプリ状態 ---
 const state = {
     db: null,
     currentChatId: null,
     currentMessages: [], // { role: 'user'|'model'|'error', content: string, timestamp: number, attachments?: { name: string, base64Data: string, mimeType: string }[], ... }
     currentSystemPrompt: '', // 現在のチャットのシステムプロンプト
-    settings: { // デフォルト値
-        apiKey: '',
-        modelName: DEFAULT_MODEL,
-        streamingOutput: DEFAULT_STREAMING_OUTPUT,
-        streamingSpeed: DEFAULT_STREAMING_SPEED,
-        systemPrompt: '', // デフォルトのシステムプロンプト
-        temperature: null,
-        maxTokens: null,
-        topK: null,
-        topP: null,
-        presencePenalty: null,
-        frequencyPenalty: null,
-        thinkingBudget: null,
-        includeThoughts: true, // Include Thoughts のデフォルト値
-        dummyUser: '',
-        dummyModel: '',
-        enableDummyUser: false, // ダミーUser有効化設定
-        enableDummyModel: false, // ダミーModel有効化設定
-        concatDummyModel: false, // ダミーモデル連結設定
-        additionalModels: '', // 追加モデル用設定
-        pseudoStreaming: false,
-        enterToSend: true,
-        historySortOrder: 'updatedAt',
-        darkMode: false, // デフォルトはダークモードOFF
-        backgroundImageBlob: null, // デフォルト背景はnull
-        fontFamily: '', // デフォルトフォントは空 (CSS変数で定義)
-        hideSystemPromptInChat: false, // SP非表示設定 (デフォルトfalse)
-        enableGrounding: false, //ネット検索設定 (デフォルトfalse)
-        enableSwipeNavigation: true,
-        debugVirtualSend: false, // デバッグ用仮想送信設定 (デフォルトfalse)
-        debugVirtualResponse: '', // デバッグ用仮想送信の返答 (デフォルト空文字列)
-        // コンテキスト圧縮設定
-        compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
-        keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
-        keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
-        compressionPromptTokenCount: null, // 圧縮プロンプトのトークン数（キャッシュ用）
-        // ContextNote設定
-        contextNoteRandomFrequency: DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY, // ランダム選択の確率（0.0-1.0）
-        contextNoteRandomCount: DEFAULT_CONTEXT_NOTE_RANDOM_COUNT, // ランダム選択するノートの数
-        contextNoteMessageCount: DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT, // ContextNote対象メッセージ数（user+model合わせて）
-        contextNoteMaxChars: DEFAULT_CONTEXT_NOTE_MAX_CHARS, // ContextNote対象文字列の最大文字数
-        contextNoteInsertionPriority: DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY, // マッチング結果の挿入優先度（1-5）
-    },
+    settings: { ...AppConfig.DEFAULTS },
     backgroundImageUrl: null, // 生成されたオブジェクトURL (DBには保存しない)
     isSending: false,
     abortController: null,
@@ -575,148 +479,13 @@ const dbUtils = {
 
     // 全設定を読み込み
     async loadSettings() {
-        await this.openDB();
-        return new Promise((resolve, reject) => {
-            const store = this._getStore(SETTINGS_STORE);
-            const request = store.getAll();
-
-            request.onsuccess = (event) => {
-                const settingsArray = event.target.result;
-                const loadedSettings = {};
-                settingsArray.forEach(item => {
-                    loadedSettings[item.key] = item.value;
-                });
-
-                // stateから初期のデフォルト設定を取得
-                const defaultSettings = { ...state.settings };
-
-                // state.settingsをデフォルトにリセットしてから読み込んだ値を適用
-                state.settings = { ...defaultSettings };
-
-                // デフォルト値の上に読み込んだ値を適用し、型安全性を確保
-                for (const key in loadedSettings) {
-                        if (key in defaultSettings) { // デフォルト状態に存在するキーのみ処理
-                        const loadedValue = loadedSettings[key];
-                        const defaultValue = defaultSettings[key];
-
-                        if (key === 'backgroundImageBlob') {
-                            // 背景画像はBlobまたはnullのみ受け入れる
-                            if (loadedValue instanceof Blob) {
-                                    state.settings[key] = loadedValue;
-                            } else {
-                                    if (loadedValue !== null) console.warn(`読み込んだ 'backgroundImageBlob' がBlobではありません。nullに設定します。型: ${typeof loadedValue}`);
-                                    state.settings[key] = null; // Blobでないか明示的にnullならnullを使用
-                            }
-                        } else if (key === 'hideSystemPromptInChat') { // SP非表示設定
-                            state.settings[key] = loadedValue === true;
-                        } else if (key === 'enableGrounding') { // ネット検索設定
-                            state.settings[key] = loadedValue === true;
-                        } else if (key === 'enableSwipeNavigation') { // スワイプナビゲーション設定
-                            state.settings[key] = loadedValue === true;
-                        } else if (key === 'debugVirtualSend') { // デバッグ用仮想送信設定
-                            state.settings[key] = loadedValue === true;
-                        } else if (key === 'debugVirtualResponse') { // デバッグ用仮想送信の返答
-                            state.settings[key] = typeof loadedValue === 'string' ? loadedValue : '';
-                        } else if (key === 'compressionMode') { // 圧縮モード設定
-                            state.settings[key] = loadedValue === true;
-                        } else if (key === 'contextNoteRandomFrequency') { // ContextNoteランダム選択確率
-                            const num = parseFloat(loadedValue);
-                            if (isNaN(num) || num < 0 || num > 1) {
-                                state.settings[key] = DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY; // デフォルト値
-                            } else {
-                                state.settings[key] = num;
-                            }
-                        } else if (key === 'contextNoteRandomCount') { // ContextNoteランダム選択数
-                            const num = parseInt(loadedValue, 10);
-                            if (isNaN(num) || num < 1) {
-                                state.settings[key] = DEFAULT_CONTEXT_NOTE_RANDOM_COUNT; // デフォルト値
-                            } else {
-                                state.settings[key] = num;
-                            }
-                        } else if (key === 'contextNoteMessageCount') { // ContextNote対象メッセージ数
-                            const num = parseInt(loadedValue, 10);
-                            if (isNaN(num) || num < 1) {
-                                state.settings[key] = DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT; // デフォルト値
-                            } else {
-                                state.settings[key] = num;
-                            }
-                        } else if (key === 'contextNoteMaxChars') { // ContextNote最大文字数
-                            const num = parseInt(loadedValue, 10);
-                            if (isNaN(num) || num < 100) {
-                                state.settings[key] = DEFAULT_CONTEXT_NOTE_MAX_CHARS; // デフォルト値
-                            } else {
-                                state.settings[key] = num;
-                            }
-                        } else if (key === 'contextNoteInsertionPriority') { // ContextNote挿入優先度
-                            const num = parseInt(loadedValue, 10);
-                            if (isNaN(num) || num < 1 || num > 10) {
-                                state.settings[key] = DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY; // デフォルト値
-                            } else {
-                                state.settings[key] = num;
-                            }
-                        } else if (key === 'darkMode' || key === 'streamingOutput' || key === 'pseudoStreaming' || key === 'enterToSend' || key === 'concatDummyModel') {
-                                // その他の真偽値: 厳密にtrueかチェック
-                                state.settings[key] = loadedValue === true;
-                        } else if (key === 'thinkingBudget') {
-                            const num = parseInt(loadedValue, 10);
-                            if (isNaN(num) || num < 0) { // 整数かつ0以上かチェック
-                                state.settings[key] = null; // 不正値はnull
-                            } else {
-                                state.settings[key] = num;
-                            }
-                        } else if (typeof defaultValue === 'number' || defaultValue === null) {
-                                // 数値 (オプションのものはnullを扱う)
-                                let num;
-                                if (key === 'temperature' || key === 'topP' || key === 'presencePenalty' || key === 'frequencyPenalty') {
-                                    num = parseFloat(loadedValue);
-                                } else { // streamingSpeed, maxTokens, topK
-                                    num = parseInt(loadedValue, 10);
-                                }
-
-                                // パース失敗、またはオプションパラメータがnull/空で読み込まれたかチェック
-                                if (isNaN(num)) {
-                                    // パース失敗した場合、オプションパラメータで元々null/空が意図されていたかチェック
-                                    if ((key === 'temperature' || key === 'maxTokens' || key === 'topK' || key === 'topP' || key === 'presencePenalty' || key === 'frequencyPenalty') && (loadedValue === null || loadedValue === '')) {
-                                        state.settings[key] = null; // nullのままにする
-                                    } else {
-                                        state.settings[key] = defaultValue; // 不正な必須数値ならデフォルトにリセット
-                                    }
-                                } else {
-                                    // 範囲を持つ数値のバリデーション (オプション)
-                                    if (key === 'temperature' && (num < 0 || num > 2)) num = defaultValue;
-                                    if (key === 'maxTokens' && num < 1) num = defaultValue;
-                                    if (key === 'topK' && num < 1) num = defaultValue;
-                                    if (key === 'topP' && (num < 0 || num > 1)) num = defaultValue;
-                                    if (key === 'streamingSpeed' && num < 0) num = defaultValue;
-                                    if ((key === 'presencePenalty' || key === 'frequencyPenalty') && (num < -2.0 || num > 2.0)) num = defaultValue;
-                                    state.settings[key] = num;
-                                }
-                        } else if (typeof defaultValue === 'string') {
-                                // 文字列: 読み込んだ値が文字列なら使用、そうでなければデフォルト
-                                state.settings[key] = typeof loadedValue === 'string' ? loadedValue : defaultValue;
-                        } else {
-                            // defaultSettingsが適切に定義されていればここには来ないはず
-                            console.warn(`予期しない設定タイプ キー: ${key}`);
-                            state.settings[key] = loadedValue;
-                        }
-                    } else {
-                        console.warn(`DBから読み込んだ未知の設定を無視: ${key}`);
-                    }
-                }
-
-                // 設定が明示的にtrueとして保存されていない場合、OSのダークモード設定を初期適用
-                if (state.settings.darkMode !== true && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                        console.log("OSのダークモード設定を初期適用");
-                        state.settings.darkMode = true;
-                        // 注意: これはDBにはすぐ保存しない。ユーザーが切り替えて保存する必要がある
-                }
-
-
-                console.log("設定読み込み完了:", { ...state.settings, backgroundImageBlob: state.settings.backgroundImageBlob ? '[Blob]' : null });
-                resolve(state.settings);
-            };
-            request.onerror = (event) => reject(`設定読み込みエラー: ${event.target.error}`);
-        });
+        await appConfig.load();
+		
+        // ダークモードのOS設定を初期適用
+        if (appConfig.get('darkMode') !== true && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            appConfig.set('darkMode', true);
+        }
+        state.settings = { ...appConfig.config };
     },
 
     // チャットを保存 (タイトル指定可)
@@ -1876,9 +1645,9 @@ const uiUtils = {
     // 設定をUIに適用
     applySettingsToUI() {
         elements.apiKeyInput.value = state.settings.apiKey || '';
-        elements.modelNameSelect.value = state.settings.modelName || DEFAULT_MODEL;
+        elements.modelNameSelect.value = state.settings.modelName || AppConfig.DEFAULTS.modelName;
         elements.streamingOutputCheckbox.checked = state.settings.streamingOutput;
-        elements.streamingSpeedInput.value = state.settings.streamingSpeed ?? DEFAULT_STREAMING_SPEED;
+        elements.streamingSpeedInput.value = state.settings.streamingSpeed ?? AppConfig.DEFAULTS.streamingSpeed;
         elements.systemPromptDefaultTextarea.value = state.settings.systemPrompt || ''; // デフォルト用
         elements.temperatureInput.value = state.settings.temperature === null ? '' : state.settings.temperature;
         elements.maxTokensInput.value = state.settings.maxTokens === null ? '' : state.settings.maxTokens;
@@ -1905,15 +1674,15 @@ const uiUtils = {
         elements.debugVirtualSendToggle.checked = state.settings.debugVirtualSend; // デバッグ用仮想送信設定を適用
         elements.debugVirtualResponseTextarea.value = state.settings.debugVirtualResponse || ''; // デバッグ用仮想送信の返答を適用
         // コンテキスト圧縮設定を適用
-        elements.compressionPromptTextarea.value = state.settings.compressionPrompt || DEFAULT_COMPRESSION_PROMPT;
-        elements.keepFirstMessagesInput.value = state.settings.keepFirstMessages ?? DEFAULT_KEEP_FIRST_MESSAGES;
-        elements.keepLastMessagesInput.value = state.settings.keepLastMessages ?? DEFAULT_KEEP_LAST_MESSAGES;
+        elements.compressionPromptTextarea.value = state.settings.compressionPrompt || AppConfig.DEFAULTS.compressionPrompt;
+        elements.keepFirstMessagesInput.value = state.settings.keepFirstMessages ?? AppConfig.DEFAULTS.keepFirstMessages;
+        elements.keepLastMessagesInput.value = state.settings.keepLastMessages ?? AppConfig.DEFAULTS.keepLastMessages;
         // ContextNote設定を適用
-        elements.contextNoteRandomFrequencyInput.value = state.settings.contextNoteRandomFrequency ?? DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY;
-        elements.contextNoteRandomCountInput.value = state.settings.contextNoteRandomCount ?? DEFAULT_CONTEXT_NOTE_RANDOM_COUNT;
-        elements.contextNoteMessageCountInput.value = state.settings.contextNoteMessageCount ?? DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT;
-        elements.contextNoteMaxCharsInput.value = state.settings.contextNoteMaxChars ?? DEFAULT_CONTEXT_NOTE_MAX_CHARS;
-        elements.contextNoteInsertionPriorityInput.value = state.settings.contextNoteInsertionPriority ?? DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY;
+        elements.contextNoteRandomFrequencyInput.value = state.settings.contextNoteRandomFrequency ?? AppConfig.DEFAULTS.contextNoteRandomFrequency;
+        elements.contextNoteRandomCountInput.value = state.settings.contextNoteRandomCount ?? AppConfig.DEFAULTS.contextNoteRandomCount;
+        elements.contextNoteMessageCountInput.value = state.settings.contextNoteMessageCount ?? AppConfig.DEFAULTS.contextNoteMessageCount;
+        elements.contextNoteMaxCharsInput.value = state.settings.contextNoteMaxChars ?? AppConfig.DEFAULTS.contextNoteMaxChars;
+        elements.contextNoteInsertionPriorityInput.value = state.settings.contextNoteInsertionPriority ?? AppConfig.DEFAULTS.contextNoteInsertionPriority;
 
         // ユーザー指定モデルをコンボボックスに追加
         this.updateUserModelOptions();
@@ -1956,14 +1725,14 @@ const uiUtils = {
         document.body.classList.toggle('dark-mode', isDark);
         // OS設定の上書き用クラス (ダークモードでない場合)
         document.body.classList.toggle('light-mode-forced', !isDark);
-        elements.themeColorMeta.content = isDark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR;
+        elements.themeColorMeta.content = isDark ? AppConfig.DEFAULTS.darkThemeColor : AppConfig.DEFAULTS.lightThemeColor;
         console.log(`ダークモード ${isDark ? '有効' : '無効'}. テーマカラー: ${elements.themeColorMeta.content}`);
     },
 
     // フォント設定を適用
     applyFontFamily() {
         const customFont = state.settings.fontFamily?.trim();
-        const fontFamilyToApply = customFont ? customFont : DEFAULT_FONT_FAMILY;
+        const fontFamilyToApply = customFont ? customFont : AppConfig.DEFAULTS.fontFamily;
         document.documentElement.style.setProperty('--font-family', fontFamilyToApply);
         console.log(`フォント適用: ${fontFamilyToApply}`);
     },
@@ -2355,7 +2124,7 @@ const apiUtils = {
 
         const useStreaming = state.settings.streamingOutput;
         const usePseudo = state.settings.pseudoStreaming;
-        const model = state.settings.modelName || DEFAULT_MODEL;
+        const model = state.settings.modelName || AppConfig.DEFAULTS.modelName;
         const apiKey = state.settings.apiKey;
 
         // ストリーミング/疑似ストリーミング/非ストリーミングでエンドポイントを切り替え
@@ -3505,7 +3274,7 @@ const appLogic = {
                 }
 
                 // 3. 履歴画面での操作ならリストUI更新 & 状態リセット判定
-                if (currentScreenBeforeDelete === 'history') {
+                if (currentScreenBeforeDelete === 'history') { // stateで判定
                     console.log("履歴画面での操作のため、リストUIを更新します。");
                     await uiUtils.renderHistoryList(); // リストUIを更新
                     const listIsEmpty = elements.historyList.querySelectorAll('.history-item:not(.js-history-item-template)').length === 0;
@@ -4345,7 +4114,7 @@ const appLogic = {
                 apiKey: elements.apiKeyInput.value.trim(),
                 modelName: elements.modelNameSelect.value,
                 streamingOutput: elements.streamingOutputCheckbox.checked,
-                streamingSpeed: elements.streamingSpeedInput.value === '' ? DEFAULT_STREAMING_SPEED : parseInt(elements.streamingSpeedInput.value),
+                streamingSpeed: elements.streamingSpeedInput.value === '' ? AppConfig.DEFAULTS.streamingSpeed : parseInt(elements.streamingSpeedInput.value),
                 systemPrompt: elements.systemPromptDefaultTextarea.value.trim(), // デフォルト用
                 temperature: elements.temperatureInput.value === '' ? null : parseFloat(elements.temperatureInput.value),
                 maxTokens: elements.maxTokensInput.value === '' ? null : parseInt(elements.maxTokensInput.value),
@@ -4374,65 +4143,15 @@ const appLogic = {
                 // コンテキスト圧縮設定を取得
                 compressionMode: state.isCompressionMode,
                 compressionPrompt: elements.compressionPromptTextarea.value.trim(),
-                keepFirstMessages: elements.keepFirstMessagesInput.value === '' ? DEFAULT_KEEP_FIRST_MESSAGES : parseInt(elements.keepFirstMessagesInput.value),
-                keepLastMessages: elements.keepLastMessagesInput.value === '' ? DEFAULT_KEEP_LAST_MESSAGES : parseInt(elements.keepLastMessagesInput.value),
+                keepFirstMessages: elements.keepFirstMessagesInput.value === '' ? AppConfig.DEFAULTS.keepFirstMessages : parseInt(elements.keepFirstMessagesInput.value),
+                keepLastMessages: elements.keepLastMessagesInput.value === '' ? AppConfig.DEFAULTS.keepLastMessages : parseInt(elements.keepLastMessagesInput.value),
                 // ContextNote設定を取得
-                contextNoteRandomFrequency: elements.contextNoteRandomFrequencyInput.value === '' ? DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY : parseFloat(elements.contextNoteRandomFrequencyInput.value),
-                contextNoteRandomCount: elements.contextNoteRandomCountInput.value === '' ? DEFAULT_CONTEXT_NOTE_RANDOM_COUNT : parseInt(elements.contextNoteRandomCountInput.value),
-                contextNoteMessageCount: elements.contextNoteMessageCountInput.value === '' ? DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT : parseInt(elements.contextNoteMessageCountInput.value),
-                contextNoteMaxChars: elements.contextNoteMaxCharsInput.value === '' ? DEFAULT_CONTEXT_NOTE_MAX_CHARS : parseInt(elements.contextNoteMaxCharsInput.value),
-                contextNoteInsertionPriority: elements.contextNoteInsertionPriorityInput.value === '' ? DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY : parseInt(elements.contextNoteInsertionPriorityInput.value),
+                contextNoteRandomFrequency: elements.contextNoteRandomFrequencyInput.value === '' ? AppConfig.DEFAULTS.contextNoteRandomFrequency : parseFloat(elements.contextNoteRandomFrequencyInput.value),
+                contextNoteRandomCount: elements.contextNoteRandomCountInput.value === '' ? AppConfig.DEFAULTS.contextNoteRandomCount : parseInt(elements.contextNoteRandomCountInput.value),
+                contextNoteMessageCount: elements.contextNoteMessageCountInput.value === '' ? AppConfig.DEFAULTS.contextNoteMessageCount : parseInt(elements.contextNoteMessageCountInput.value),
+                contextNoteMaxChars: elements.contextNoteMaxCharsInput.value === '' ? AppConfig.DEFAULTS.contextNoteMaxChars : parseInt(elements.contextNoteMaxCharsInput.value),
+                contextNoteInsertionPriority: elements.contextNoteInsertionPriorityInput.value === '' ? AppConfig.DEFAULTS.contextNoteInsertionPriority : parseInt(elements.contextNoteInsertionPriorityInput.value),
             };
-
-            // --- 数値入力のバリデーション ---
-            if (isNaN(newSettings.streamingSpeed) || newSettings.streamingSpeed < 0) {
-                newSettings.streamingSpeed = DEFAULT_STREAMING_SPEED;
-            }
-            if (newSettings.temperature !== null && (isNaN(newSettings.temperature) || newSettings.temperature < 0 || newSettings.temperature > 2)) {
-                newSettings.temperature = null; // 不正値はnull (APIデフォルト) に
-            }
-            if (newSettings.maxTokens !== null && (isNaN(newSettings.maxTokens) || newSettings.maxTokens < 1)) {
-                newSettings.maxTokens = null;
-            }
-            if (newSettings.topK !== null && (isNaN(newSettings.topK) || newSettings.topK < 1)) {
-                newSettings.topK = null;
-            }
-            if (newSettings.topP !== null && (isNaN(newSettings.topP) || newSettings.topP < 0 || newSettings.topP > 1)) {
-                newSettings.topP = null;
-            }
-            if (newSettings.presencePenalty !== null && (isNaN(newSettings.presencePenalty) || newSettings.presencePenalty < -2.0 || newSettings.presencePenalty >= 2.0)) {
-                newSettings.presencePenalty = null; // 不正値は null (APIデフォルト) に
-            }
-            if (newSettings.frequencyPenalty !== null && (isNaN(newSettings.frequencyPenalty) || newSettings.frequencyPenalty < -2.0 || newSettings.frequencyPenalty >= 2.0)) {
-                newSettings.frequencyPenalty = null; // 不正値は null (APIデフォルト) に
-            }
-            if (newSettings.thinkingBudget !== null && (isNaN(newSettings.thinkingBudget) || newSettings.thinkingBudget < 0 || !Number.isInteger(newSettings.thinkingBudget))) {
-                newSettings.thinkingBudget = null; // 不正値はnull
-            }
-            // コンテキスト圧縮設定のバリデーション
-            if (isNaN(newSettings.keepFirstMessages) || newSettings.keepFirstMessages < 0) {
-                newSettings.keepFirstMessages = DEFAULT_KEEP_FIRST_MESSAGES;
-            }
-            if (isNaN(newSettings.keepLastMessages) || newSettings.keepLastMessages < 0) {
-                newSettings.keepLastMessages = DEFAULT_KEEP_LAST_MESSAGES;
-            }
-            // ContextNote設定のバリデーション
-            if (isNaN(newSettings.contextNoteRandomFrequency) || newSettings.contextNoteRandomFrequency < 0 || newSettings.contextNoteRandomFrequency > 1) {
-                newSettings.contextNoteRandomFrequency = DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY;
-            }
-            if (isNaN(newSettings.contextNoteRandomCount) || newSettings.contextNoteRandomCount < 1) {
-                newSettings.contextNoteRandomCount = DEFAULT_CONTEXT_NOTE_RANDOM_COUNT;
-            }
-            if (isNaN(newSettings.contextNoteMessageCount) || newSettings.contextNoteMessageCount < 1) {
-                newSettings.contextNoteMessageCount = DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT;
-            }
-            if (isNaN(newSettings.contextNoteMaxChars) || newSettings.contextNoteMaxChars < 100) {
-                newSettings.contextNoteMaxChars = DEFAULT_CONTEXT_NOTE_MAX_CHARS;
-            }
-                    if (isNaN(newSettings.contextNoteInsertionPriority) || newSettings.contextNoteInsertionPriority < 1 || newSettings.contextNoteInsertionPriority > 5) {
-            newSettings.contextNoteInsertionPriority = DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY;
-        }
-            // --- バリデーション終了 ---
 
             try {
                 const oldSortOrder = state.settings.historySortOrder; // 更新前のソート順を保持
@@ -4499,48 +4218,7 @@ const appLogic = {
                 state.currentMessages = [];
                 state.currentSystemPrompt = ''; // システムプロンプトもリセット
                 state.pendingAttachments = [];
-                state.settings = { // 初期デフォルト値に戻す
-                    apiKey: '',
-                    modelName: DEFAULT_MODEL,
-                            streamingOutput: DEFAULT_STREAMING_OUTPUT,
-        streamingSpeed: DEFAULT_STREAMING_SPEED,
-                    systemPrompt: '', // デフォルトSPもリセット
-                    temperature: null,
-                    maxTokens: null,
-                    topK: null,
-                    topP: null,
-                    presencePenalty: null,
-                    frequencyPenalty: null,
-                    thinkingBudget: null,
-                    dummyUser: '',
-                    dummyModel: '',
-                    enableDummyUser: false,
-                    enableDummyModel: false,
-                    concatDummyModel: false,
-                    additionalModels: '',
-                    pseudoStreaming: false,
-                    enterToSend: true,
-                    historySortOrder: 'updatedAt',
-                    // ダークモードはOS設定にフォールバック
-                    darkMode: window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false,
-                    backgroundImageBlob: null,
-                    fontFamily: '', // フォントもリセット
-                    hideSystemPromptInChat: false, // SP非表示もリセット
-                    enableSwipeNavigation: true, // スワイプナビゲーションのデフォルト値
-                    debugVirtualSend: false, // デバッグ用仮想送信のデフォルト値
-                    debugVirtualResponse: '', // デバッグ用仮想送信の返答のデフォルト値
-                    // コンテキスト圧縮設定のデフォルト値
-                    compressionMode: true,
-                    compressionPrompt: DEFAULT_COMPRESSION_PROMPT,
-                    keepFirstMessages: DEFAULT_KEEP_FIRST_MESSAGES,
-                    keepLastMessages: DEFAULT_KEEP_LAST_MESSAGES,
-                    // ContextNote設定のデフォルト値
-                    contextNoteRandomFrequency: DEFAULT_CONTEXT_NOTE_RANDOM_FREQUENCY,
-                    contextNoteRandomCount: DEFAULT_CONTEXT_NOTE_RANDOM_COUNT,
-                    contextNoteMessageCount: DEFAULT_CONTEXT_NOTE_MESSAGE_COUNT,
-                    contextNoteMaxChars: DEFAULT_CONTEXT_NOTE_MAX_CHARS,
-                    contextNoteInsertionPriority: DEFAULT_CONTEXT_NOTE_INSERTION_PRIORITY,
-                };
+                state.settings = { ...AppConfig.DEFAULTS };
                 state.backgroundImageUrl = null;
 
                 // リセットされた状態をUIに適用
@@ -6046,11 +5724,11 @@ const appLogic = {
     // デフォルトのコンテキストノート仕様を追加
     addDefaultContextNoteSpec() {
         state.contextNote.addNote(
-            DEFAULT_CONTEXT_NOTE_SPEC.type,
-            DEFAULT_CONTEXT_NOTE_SPEC.title,
-            DEFAULT_CONTEXT_NOTE_SPEC.content,
-            DEFAULT_CONTEXT_NOTE_SPEC.keywords,
-            DEFAULT_CONTEXT_NOTE_SPEC.category
+            ContextNote.DEFAULT_SPEC.type,
+            ContextNote.DEFAULT_SPEC.title,
+            ContextNote.DEFAULT_SPEC.content,
+            ContextNote.DEFAULT_SPEC.keywords,
+            ContextNote.DEFAULT_SPEC.category
         );
 
         // チャットを保存
@@ -6327,8 +6005,5 @@ const appLogic = {
 
 }; // appLogic終了
 
-// ResponseReplacerをグローバルスコープで利用可能にする
 window.ResponseReplacer = ResponseReplacer;
-
-// ContextNoteをグローバルスコープで利用可能にする
 window.ContextNote = ContextNote;
