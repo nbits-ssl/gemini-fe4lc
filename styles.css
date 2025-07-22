@@ -3002,12 +3002,13 @@ body.dark-mode .scroll-arrow-svg {
 @media (max-width: 600px) {
   .modal-content.large-modal {
     width: 98vw;
-    height: 95vh;
     max-width: 98vw;
-    max-height: 98vh;
+    height: auto;
+    max-height: 90vh;
     padding: 0;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
   }
   .modal-body {
     flex: 1 1 auto;
