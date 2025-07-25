@@ -4875,11 +4875,21 @@ const appLogic = {
 
     // ResponseReplacerUIのイベントリスナーを初期化
     responseReplacerUIInit() {
-        state.responseReplacerUI.addEventListener('replacementSaved', this.onReplacementSaved.bind(this));
-        state.responseReplacerUI.addEventListener('replacementDeleteConfirm', this.onReplacementDeleteConfirm.bind(this));
-        state.responseReplacerUI.addEventListener('replacementDeleted', this.onReplacementDeleted.bind(this));
-        state.responseReplacerUI.addEventListener('replacementMoved', this.onReplacementMoved.bind(this));
-        state.responseReplacerUI.addEventListener('showAlert', this.onShowAlert.bind(this));
+        state.responseReplacerUI.addEventListener(
+            'replacementSaved', () => this.onReplacementSaved()
+        );
+        state.responseReplacerUI.addEventListener(
+            'replacementDeleteConfirm', (event) => this.onReplacementDeleteConfirm(event)
+        );
+        state.responseReplacerUI.addEventListener(
+            'replacementDeleted', () => this.onReplacementDeleted()
+        );
+        state.responseReplacerUI.addEventListener(
+            'replacementMoved', () => this.onReplacementMoved()
+        );
+        state.responseReplacerUI.addEventListener(
+            'showAlert', (event) => this.onShowAlert(event)
+        );
     },
 
 	_onReplacementSave(error_string) {
