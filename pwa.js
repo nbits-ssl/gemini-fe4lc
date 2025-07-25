@@ -2531,7 +2531,7 @@ const appLogic = {
         // レスポンス置換を読み込み（現在のチャットデータがない場合は空で初期化）
         await this.loadResponseReplacementsFromChat();
         // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
-        this.renderResponseReplacementsList();
+        state.responseReplacerUI.renderList();
             // ContextNoteを読み込み（現在のチャットデータがない場合は空で初期化）
     await this.loadContextNotesFromChat();
     
@@ -2758,7 +2758,7 @@ const appLogic = {
 
         // レスポンス置換管理イベントリスナー
         elements.addResponseReplacementBtn.addEventListener('click', () => {
-            this.addResponseReplacement();
+            state.responseReplacerUI.add();
         });
         
         // ContextNote管理イベントリスナー
@@ -2787,18 +2787,10 @@ const appLogic = {
             }
         });
 
-        // レスポンス置き換え直接編集モーダルイベントリスナー
-        elements.editResponseReplacementsDirectlyBtn.addEventListener('click', () => this.openResponseReplacementsDirectEditModal());
-        elements.closeResponseReplacementsDirectEditModal.addEventListener('click', () => this.closeResponseReplacementsDirectEditModal());
-        elements.saveResponseReplacementsYamlBtn.addEventListener('click', () => this.saveResponseReplacementsYamlContent());
-        elements.cancelResponseReplacementsYamlBtn.addEventListener('click', () => this.closeResponseReplacementsDirectEditModal());
-        
-        // レスポンス置き換えモーダル外クリックで閉じる
-        elements.responseReplacementsDirectEditModal.addEventListener('click', (event) => {
-            if (event.target === elements.responseReplacementsDirectEditModal) {
-                this.closeResponseReplacementsDirectEditModal();
-            }
-        });
+        // ResponseReplacerUIのイベントリスナーを設定
+        if (state.responseReplacerUI) {
+            state.responseReplacerUI.setupEventListeners();
+        }
     },
 
     // popstateイベントハンドラ (戻るボタン/ジェスチャー)
@@ -2991,6 +2983,8 @@ const appLogic = {
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
         
         state.responseReplacer = new ResponseReplacer();
+        state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
+        this.responseReplacerUIInit();
         state.contextNote = new ContextNote();
         
         this.addDefaultContextNoteSpec();
@@ -4810,6 +4804,10 @@ const appLogic = {
             // 新規チャットの場合
             state.responseReplacer = new ResponseReplacer();
         }
+        
+        // ResponseReplacerUIインスタンスを生成
+        state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
+        this.responseReplacerUIInit();
     },
 
     // ContextNoteをチャットデータから読み込み
@@ -4864,7 +4862,7 @@ const appLogic = {
             elements.compressionStatusTab.classList.remove('active');
             elements.responseReplacementsTab.classList.add('active');
             elements.contextNotesTab.classList.remove('active');
-            this.renderResponseReplacementsList();
+            state.responseReplacerUI.renderList();
         } else if (tabName === 'context-notes') {
             elements.promptTab.classList.remove('active');
             elements.compressionStatusTab.classList.remove('active');
@@ -4874,202 +4872,47 @@ const appLogic = {
         }
     },
 
-    // レスポンス置換リストの表示
-    renderResponseReplacementsList() {
-        const list = elements.responseReplacementsList;
-        list.innerHTML = '';
 
-        if (state.responseReplacer && state.responseReplacer.replacements.length > 0) {
-            state.responseReplacer.replacements.forEach((replacement, index) => {
-                const item = this.createResponseReplacementItem(replacement, index);
-                list.appendChild(item);
-            });
-        }
+    // ResponseReplacerUIのイベントリスナーを初期化
+    responseReplacerUIInit() {
+        state.responseReplacerUI.addEventListener('replacementSaved', this.onReplacementSaved.bind(this));
+        state.responseReplacerUI.addEventListener('replacementDeleteConfirm', this.onReplacementDeleteConfirm.bind(this));
+        state.responseReplacerUI.addEventListener('replacementDeleted', this.onReplacementDeleted.bind(this));
+        state.responseReplacerUI.addEventListener('replacementMoved', this.onReplacementMoved.bind(this));
+        state.responseReplacerUI.addEventListener('showAlert', this.onShowAlert.bind(this));
     },
 
-    // レスポンス置換アイテムの作成
-    createResponseReplacementItem(replacement, index) {
-        const item = document.createElement('div');
-        item.className = 'response-replacement-item';
-        item.dataset.index = index;
+	_onReplacementSave(error_string) {
+        dbUtils.saveChat().catch(error => console.error(error_string, error));
+	},
 
-        item.innerHTML = `
-            <div class="response-replacement-form">
-                <div class="response-replacement-form-row">
-                    <input type="text" id="fe4lc-avoid-pattern-${index}" name="fe4lc-avoid-pattern" value="${replacement.pattern}" class="replacement-input" disabled autocomplete="off">
-                    <span class="replacement-arrow">➡️</span>
-                    <input type="text" id="fe4lc-avoid-replacement-${index}" name="fe4lc-avoid-replacement" value="${replacement.replacement}" class="replacement-input" disabled autocomplete="off">
-                </div>
-                <div class="response-replacement-form-actions">
-                    <button class="move-up-btn" title="上に移動">🔼</button>
-                    <button class="move-down-btn" title="下に移動">🔽</button>
-                    <button class="edit-btn" title="編集">編集</button>
-                    <button class="delete-btn" title="削除">削除</button>
-                </div>
-            </div>
-        `;
-
-        // イベントリスナーを設定
-        const moveUpBtn = item.querySelector('.move-up-btn');
-        const moveDownBtn = item.querySelector('.move-down-btn');
-        const editBtn = item.querySelector('.edit-btn');
-        const deleteBtn = item.querySelector('.delete-btn');
-        
-        moveUpBtn.onclick = () => this.moveResponseReplacement(index, 'up');
-        moveDownBtn.onclick = () => this.moveResponseReplacement(index, 'down');
-        editBtn.onclick = () => this.editResponseReplacement(index);
-        deleteBtn.onclick = () => this.deleteResponseReplacement(index);
-
-        return item;
+    onReplacementSaved() {
+        this._onReplacementSave('レスポンス置換保存エラー:');
     },
 
-    // レスポンス置換の追加
-    addResponseReplacement() {
-        const newReplacement = {
-            pattern: '',
-            replacement: ''
-        };
-
-        const item = this.createResponseReplacementEditForm(newReplacement, -1);
-        elements.responseReplacementsList.appendChild(item);
-        
-        // 一番下までスクロール
-        setTimeout(() => {
-            const tabContent = elements.responseReplacementsTab;
-            if (tabContent) {
-                tabContent.scrollTop = tabContent.scrollHeight;
-            }
-            // フォールバック: window全体をスクロール
-            window.scrollTo(0, document.body.scrollHeight);
-        }, 25);
-    },
-
-    // レスポンス置換の編集フォーム作成
-    createResponseReplacementEditForm(replacement, index) {
-        const item = document.createElement('div');
-        item.className = 'response-replacement-item';
-        item.dataset.index = index;
-
-        item.innerHTML = `
-            <div class="response-replacement-form">
-                <div class="response-replacement-form-row">
-                    <input type="text" id="fe4lc-avoid-edit-pattern-${index}" name="fe4lc-avoid-edit-pattern" value="${replacement.pattern || ''}" placeholder="検索パターン (正規表現)" class="replacement-input" autocomplete="off">
-                    <span class="replacement-arrow">➡️</span>
-                    <input type="text" id="fe4lc-avoid-edit-replacement-${index}" name="fe4lc-avoid-edit-replacement" value="${replacement.replacement || ''}" placeholder="置換テキスト" class="replacement-input" autocomplete="off">
-                </div>
-                <div class="response-replacement-form-actions">
-                    <button class="save-btn" title="保存">保存</button>
-                    <button class="cancel-btn" title="キャンセル">キャンセル</button>
-                </div>
-            </div>
-        `;
-
-        // イベントリスナーを設定
-        const saveBtn = item.querySelector('.save-btn');
-        const cancelBtn = item.querySelector('.cancel-btn');
-        
-        saveBtn.onclick = () => this.saveResponseReplacement(index);
-        cancelBtn.onclick = () => this.cancelResponseReplacementEdit(index);
-
-        return item;
-    },
-
-    // レスポンス置換の編集
-    editResponseReplacement(index) {
-        const replacement = state.responseReplacer.replacements[index];
-        if (!replacement) return;
-
-        const list = elements.responseReplacementsList;
-        const existingItem = list.querySelector(`[data-index="${index}"]`);
-        if (existingItem) {
-            const editForm = this.createResponseReplacementEditForm(replacement, index);
-            existingItem.replaceWith(editForm);
-        }
-    },
-
-    // レスポンス置換の保存
-    saveResponseReplacement(index) {
-        const patternInput = document.getElementById(`fe4lc-avoid-edit-pattern-${index}`);
-        const replacementInput = document.getElementById(`fe4lc-avoid-edit-replacement-${index}`);
-
-        if (!patternInput || !replacementInput) return;
-
-        const pattern = patternInput.value.trim();
-        const replacement = replacementInput.value;
-
-        if (!pattern) {
-            uiUtils.showCustomAlert('検索パターンを入力してください');
-            return;
-        }
-
-        // 正規表現の妥当性チェック
-        try {
-            new RegExp(pattern);
-        } catch (e) {
-            uiUtils.showCustomAlert('無効な正規表現です');
-            return;
-        }
-
-        const newReplacement = { pattern, replacement };
-
-        if (index === -1) {
-            // 新規追加
-            state.responseReplacer.addReplacement(pattern, replacement);
-        } else {
-            // 編集
-            state.responseReplacer.updateReplacement(index, pattern, replacement);
-        }
-
-        // チャットを保存してレスポンス置換データを永続化
-        dbUtils.saveChat().catch(error => console.error('レスポンス置換保存エラー:', error));
-        this.renderResponseReplacementsList();
-    },
-
-    // レスポンス置換の削除
-    deleteResponseReplacement(index) {
+    onReplacementDeleteConfirm(event) {
+        const { index } = event.detail;
         uiUtils.showCustomConfirm('このレスポンス置換を削除しますか？').then(confirmed => {
             if (confirmed) {
-                state.responseReplacer.replacements.splice(index, 1);
-                // チャットを保存してレスポンス置換データを永続化
-                dbUtils.saveChat().catch(error => console.error('レスポンス置換削除保存エラー:', error));
-                this.renderResponseReplacementsList();
+                state.responseReplacerUI.delete(index);
             }
         });
     },
 
-    // レスポンス置換編集のキャンセル
-    cancelResponseReplacementEdit(index) {
-        if (index === -1) {
-            // 新規追加のキャンセル
-            const newItem = elements.responseReplacementsList.querySelector('[data-index="-1"]');
-            if (newItem) {
-                newItem.remove();
-            }
-        } else {
-            // 編集のキャンセル
-            this.renderResponseReplacementsList();
-        }
+    onReplacementDeleted() {
+        this._onReplacementSave('レスポンス置換削除保存エラー:');
     },
 
-    // レスポンス置換の移動
-    moveResponseReplacement(index, direction) {
-        const replacements = state.responseReplacer.replacements;
-        
-        if (direction === 'up' && index > 0) {
-            // 上に移動
-            [replacements[index], replacements[index - 1]] = [replacements[index - 1], replacements[index]];
-        } else if (direction === 'down' && index < replacements.length - 1) {
-            // 下に移動
-            [replacements[index], replacements[index + 1]] = [replacements[index + 1], replacements[index]];
-        } else {
-            // 移動できない場合は何もしない
-            return;
-        }
-        
-        // チャットを保存してレスポンス置換データを永続化
-        dbUtils.saveChat().catch(error => console.error('レスポンス置換移動保存エラー:', error));
-        this.renderResponseReplacementsList();
+    onReplacementMoved() {
+        this._onReplacementSave('レスポンス置換移動保存エラー:');
     },
+
+	
+    onShowAlert(event) {
+        uiUtils.showCustomAlert(event.detail.message);
+    },
+
+
 
     // ContextNoteリストの表示
     renderContextNotesList() {
@@ -5539,66 +5382,6 @@ const appLogic = {
             }
             
             uiUtils.scrollToBottom();
-        }
-    },
-
-    // レスポンス置き換え直接編集モーダルを開く
-    openResponseReplacementsDirectEditModal() {
-        // 現在のレスポンス置き換えデータをYAML形式に変換
-        const yamlContent = state.responseReplacer.convertToYAML();
-        elements.responseReplacementsYamlEditor.value = yamlContent;
-        elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
-        elements.responseReplacementsDirectEditModal.classList.remove('hidden');
-    },
-
-    // レスポンス置き換え直接編集モーダルを閉じる
-    closeResponseReplacementsDirectEditModal() {
-        elements.responseReplacementsDirectEditModal.classList.add('hidden');
-        elements.responseReplacementsYamlEditor.value = '';
-        elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
-    },
-
-    // レスポンス置き換えYAMLコンテンツを保存
-    async saveResponseReplacementsYamlContent() {
-        const yamlText = elements.responseReplacementsYamlEditor.value.trim();
-        
-        if (!yamlText) {
-            // 空の場合は全ての置き換えを削除
-            if (state.responseReplacer) {
-                state.responseReplacer.clear();
-            }
-            await dbUtils.saveChat();
-            this.closeResponseReplacementsDirectEditModal();
-            this.renderResponseReplacementsList();
-            return;
-        }
-
-        try {
-            // js-yamlでパース（複数ドキュメント対応）
-            const parsedData = jsyaml.loadAll(yamlText);
-            
-            // 空のドキュメントをフィルタリング
-            const replacements = parsedData.filter(doc => doc && typeof doc === 'object');
-            
-            if (replacements.length === 0) {
-                throw new Error('有効な置き換えルールが見つかりません');
-            }
-            
-			state.responseReplacer.updateFromYamlArray(replacements);
-            dbUtils.saveChat();
-
-            // エラーメッセージを非表示
-            elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
-            
-            // モーダルを閉じてリストを更新
-            this.closeResponseReplacementsDirectEditModal();
-            this.renderResponseReplacementsList();
-            
-        } catch (error) {
-            console.error('レスポンス置き換えYAMLパースエラー:', error);
-            // エラーメッセージを表示
-            elements.responseReplacementsYamlErrorMessage.textContent = `YAMLパースエラー: ${error.message}`;
-            elements.responseReplacementsYamlErrorMessage.classList.remove('hidden');
         }
     },
 
