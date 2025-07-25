@@ -269,6 +269,9 @@ class ResponseReplacerUI extends EventTarget {
 
     // イベントリスナーを設定
     setupEventListeners() {
+        // 追加ボタンのイベントリスナー
+        this.elements.addResponseReplacementBtn.addEventListener('click', () => this.add());
+        
         // レスポンス置き換え直接編集モーダルイベントリスナー
         this.elements.editResponseReplacementsDirectlyBtn.addEventListener('click', () => this.openDirectEditModal());
         this.elements.closeResponseReplacementsDirectEditModal.addEventListener('click', () => this.closeDirectEditModal());
