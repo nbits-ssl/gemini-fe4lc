@@ -8,6 +8,10 @@ class ContextNoteUI extends EventTarget {
         this.elements = elements;
     }
 
+	sync(newNote) {
+		this.contextNote = newNote;
+	}
+
     renderList() {
         const list = this.elements.contextNotesList;
         list.innerHTML = '';
@@ -190,9 +194,9 @@ class ContextNoteUI extends EventTarget {
             this.contextNote.updateNote(index, type, title, content, finalKeywords, category);
         }
 
-        this.renderList();
         this.dispatchEvent(new Event('contextNoteSaved'));
-    }
+        this.renderList();
+	}
 
     deleteConfirm(index) {
         this.dispatchEvent(new CustomEvent('contextNoteDeleteConfirm', {
@@ -317,7 +321,7 @@ class ContextNoteUI extends EventTarget {
     setupEventListeners() {
         // 追加ボタンのイベントリスナー
         this.elements.addContextNoteBtn.addEventListener('click', () => this.add());
-        
+
         // 直接編集モーダルイベントリスナー
         this.elements.editContextNotesDirectlyBtn.addEventListener('click', () => this.openDirectEditModal());
         this.elements.closeDirectEditModal.addEventListener('click', () => this.closeDirectEditModal());

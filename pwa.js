@@ -2962,11 +2962,21 @@ const appLogic = {
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
         
         state.responseReplacer = new ResponseReplacer();
-        state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
-        this.responseReplacerUIInit();
+		if (state.responseReplacerUI) {
+			state.responseReplacerUI.sync(state.responseReplacer);
+		} else {
+			state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
+			this.responseReplacerUIInit();
+		}
+
         state.contextNote = new ContextNote();
-        state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
-        this.contextNoteUIInit();
+
+		if (state.contextNoteUI) {
+			state.contextNoteUI.sync(state.contextNote);
+		} else {
+			state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
+			this.contextNoteUIInit();
+		}
         
         this.addDefaultContextNoteSpec();
         
@@ -4787,8 +4797,12 @@ const appLogic = {
         }
         
         // ResponseReplacerUIインスタンスを生成
-        state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
-        this.responseReplacerUIInit();
+		if (state.responseReplacerUI) {
+			state.responseReplacerUI.sync(state.responseReplacer);
+		} else {
+			state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
+			this.responseReplacerUIInit();
+		}
     },
 
     // ContextNoteをチャットデータから読み込み
@@ -4814,8 +4828,12 @@ const appLogic = {
             state.contextNote = new ContextNote();
         }
         
-        state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
-        this.contextNoteUIInit();
+		if (state.contextNoteUI) {
+			state.contextNoteUI.sync(state.contextNote);
+		} else {
+			state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
+			this.contextNoteUIInit();
+		}
     },
 
     // タブUI制御
@@ -4880,12 +4898,16 @@ const appLogic = {
         );
     },
 
-	_onReplacementSave(error_string) {
-        dbUtils.saveChat().catch(error => console.error(error_string, error));
+	async _onReplacementSave(error_string) {
+        try {
+            await dbUtils.saveChat();
+        } catch (error) {
+            console.error(error_string, error);
+        }
 	},
 
-    onReplacementSaved() {
-        this._onReplacementSave('レスポンス置換保存エラー:');
+    async onReplacementSaved() {
+        await this._onReplacementSave('レスポンス置換保存エラー:');
     },
 
     onReplacementDeleteConfirm(event) {
@@ -4897,12 +4919,12 @@ const appLogic = {
         });
     },
 
-    onReplacementDeleted() {
-        this._onReplacementSave('レスポンス置換削除保存エラー:');
+    async onReplacementDeleted() {
+        await this._onReplacementSave('レスポンス置換削除保存エラー:');
     },
 
-    onReplacementMoved() {
-        this._onReplacementSave('レスポンス置換移動保存エラー:');
+    async onReplacementMoved() {
+        await this._onReplacementSave('レスポンス置換移動保存エラー:');
     },
 
 	
@@ -4925,11 +4947,15 @@ const appLogic = {
         );
     },
 
-    _onContextNoteSave(error_string) {
-        dbUtils.saveChat().catch(error => console.error(error_string, error));
+    async _onContextNoteSave(error_string) {
+        try {
+            await dbUtils.saveChat();
+        } catch (error) {
+            console.error(error_string, error);
+        }
     },
-    onContextNoteSaved() {
-        this._onContextNoteSave('ContextNote保存エラー:');
+    async onContextNoteSaved() {
+        await this._onContextNoteSave('ContextNote保存エラー:');
     },
 
     onContextNoteDeleteConfirm(event) {
@@ -4941,12 +4967,12 @@ const appLogic = {
         });
     },
 
-    onContextNoteDeleted() {
-        this._onContextNoteSave('ContextNote削除保存エラー:');
+    async onContextNoteDeleted() {
+        await this._onContextNoteSave('ContextNote削除保存エラー:');
     },
 
-    onContextNoteMoved() {
-        this._onContextNoteSave('ContextNote移動保存エラー:');
+    async onContextNoteMoved() {
+        await this._onContextNoteSave('ContextNote移動保存エラー:');
     },
 
 	

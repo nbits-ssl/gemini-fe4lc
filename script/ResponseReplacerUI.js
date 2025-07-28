@@ -8,7 +8,10 @@ class ResponseReplacerUI extends EventTarget {
         this.elements = elements;
     }
 
-    // リストの表示
+    sync(newReplacer) {
+        this.responseReplacer = newReplacer;
+    }
+
     renderList() {
         const list = this.elements.responseReplacementsList;
         list.innerHTML = '';
@@ -21,7 +24,6 @@ class ResponseReplacerUI extends EventTarget {
         }
     }
 
-    // アイテムの作成
     createItem(replacement, index) {
         const item = document.createElement('div');
         item.className = 'response-replacement-item';
@@ -57,7 +59,6 @@ class ResponseReplacerUI extends EventTarget {
         return item;
     }
 
-    // 追加
     add() {
         const newReplacement = {
             pattern: '',
@@ -78,7 +79,6 @@ class ResponseReplacerUI extends EventTarget {
         }, 25);
     }
 
-    // 編集フォーム作成
     createEditForm(replacement, index) {
         const item = document.createElement('div');
         item.className = 'response-replacement-item';
@@ -108,7 +108,6 @@ class ResponseReplacerUI extends EventTarget {
         return item;
     }
 
-    // 編集
     edit(index) {
         const replacement = this.responseReplacer.replacements[index];
         if (!replacement) return;
@@ -121,7 +120,6 @@ class ResponseReplacerUI extends EventTarget {
         }
     }
 
-    // 保存
     save(index) {
         const patternInput = document.getElementById(`fe4lc-avoid-edit-pattern-${index}`);
         const replacementInput = document.getElementById(`fe4lc-avoid-edit-replacement-${index}`);
@@ -156,25 +154,22 @@ class ResponseReplacerUI extends EventTarget {
             this.responseReplacer.updateReplacement(index, pattern, replacement);
         }
 
-		this.renderList();
         this.dispatchEvent(new Event('replacementSaved'));
+        this.renderList();
     }
 
-    // 削除確認
     deleteConfirm(index) {
         this.dispatchEvent(new CustomEvent('replacementDeleteConfirm', {
             detail: { index }
         }));
     }
 
-    // 削除実行
     delete(index) {
         this.responseReplacer.replacements.splice(index, 1);
         this.renderList();
         this.dispatchEvent(new Event('replacementDeleted'));
     }
 
-    // 編集キャンセル
     cancelEdit(index) {
         if (index === -1) {
             // 新規追加のキャンセル
@@ -188,7 +183,6 @@ class ResponseReplacerUI extends EventTarget {
         }
     }
 
-    // 移動
     move(index, direction) {
         const replacements = this.responseReplacer.replacements;
         
@@ -207,7 +201,6 @@ class ResponseReplacerUI extends EventTarget {
         this.dispatchEvent(new Event('replacementMoved'));
     }
 
-    // 直接編集モーダルを開く
     openDirectEditModal() {
         // 現在のレスポンス置き換えデータをYAML形式に変換
         const yamlContent = this.responseReplacer.convertToYAML();
@@ -216,14 +209,12 @@ class ResponseReplacerUI extends EventTarget {
         this.elements.responseReplacementsDirectEditModal.classList.remove('hidden');
     }
 
-    // 直接編集モーダルを閉じる
     closeDirectEditModal() {
         this.elements.responseReplacementsDirectEditModal.classList.add('hidden');
         this.elements.responseReplacementsYamlEditor.value = '';
         this.elements.responseReplacementsYamlErrorMessage.classList.add('hidden');
     }
 
-    // YAMLコンテンツを保存
     async saveYamlContent() {
         const yamlText = this.elements.responseReplacementsYamlEditor.value.trim();
         
@@ -267,7 +258,6 @@ class ResponseReplacerUI extends EventTarget {
         }
     }
 
-    // イベントリスナーを設定
     setupEventListeners() {
         // 追加ボタンのイベントリスナー
         this.elements.addResponseReplacementBtn.addEventListener('click', () => this.add());

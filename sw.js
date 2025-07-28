@@ -8,8 +8,12 @@ const urlsToCache = [
   './fe4lc.js',
   './styles.css',
   './marked.js',
+  './script/AppConfig.js',
   './script/ContextNote.js',
+  './script/ContextNoteUI.js',
+  './script/IndexedDBAdapter.js',
   './script/ResponseReplacer.js',
+  './script/ResponseReplacerUI.js',
   './manifest.json',
   // アイコンファイルもキャッシュする場合 (manifest.json で指定したもの)
   './icon-192x192.png',
