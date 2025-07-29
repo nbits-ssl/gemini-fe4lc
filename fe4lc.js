@@ -567,20 +567,15 @@ function processRequestForDisplay(requestBody) {
         
         // contentsの各メッセージのpartsを処理
         if (shortenedRequest.contents) {
-        console.log('プロンプト確認処理 - CONTEXT_NOTE_ROLE:', CONTEXT_NOTE_ROLE);
             shortenedRequest.contents.forEach(content => {
-            console.log('プロンプト確認処理 - content.role:', content.role);
                 if (content.parts) {
                     content.parts.forEach(part => {
                         if (part.text) {
-                        console.log('プロンプト確認処理 - part.text:', part.text.substring(0, 50) + '...');
                         // 圧縮データまたはContextNoteデータは短縮しない
                         if (part.text.startsWith(SUMMARY_TAG_START) || 
                             content.role === CONTEXT_NOTE_ROLE) {
-                            console.log('プロンプト確認処理 - 短縮スキップ（ContextNoteまたは圧縮データ）');
                             // そのまま表示
                             } else {
-                            console.log('プロンプト確認処理 - 短縮実行');
                                 part.text = shortenText(part.text);
                             }
                         }
@@ -593,7 +588,6 @@ function processRequestForDisplay(requestBody) {
             
             // ContextNoteロールをuserに戻す
             if (content.role === CONTEXT_NOTE_ROLE) {
-                console.log('プロンプト確認処理 - ContextNoteロールをuserに戻す');
                 content.role = 'user';
             }
             });
