@@ -457,29 +457,6 @@ const dbUtils = {
         return transaction.objectStore(storeName);
     },
 
-    // 設定を保存
-    async saveSetting(key, value) {
-        await this.openDB();
-        return new Promise((resolve, reject) => {
-                try {
-                const store = this._getStore(SETTINGS_STORE, 'readwrite');
-                // IndexedDBはBlobを直接扱える
-                const request = store.put({ key, value });
-                request.onsuccess = () => {
-                        // console.log(`設定 '${key}' 保存成功`); // ログは必要に応じて
-                        resolve();
-                };
-                request.onerror = (event) => {
-                        console.error(`設定 ${key} の保存エラー:`, event.target.error);
-                        reject(`設定 ${key} の保存エラー: ${event.target.error}`);
-                };
-            } catch (error) {
-                console.error(`設定 ${key} 保存のためのストアアクセスエラー:`, error);
-                reject(`設定 ${key} 保存のためのストアアクセスエラー: ${error}`);
-            }
-        });
-    },
-
     // 全設定を読み込み
     async loadSettings() {
         await appConfig.load();
@@ -3882,11 +3859,11 @@ const appLogic = {
             try {
                 const oldSortOrder = state.settings.historySortOrder; // 更新前のソート順を保持
 
-                // 各設定をDBに保存 (背景Blobは除く)
-                const promises = Object.entries(newSettings).map(([key, value]) =>
-                    dbUtils.saveSetting(key, value)
-                );
-                await Promise.all(promises);
+                // appConfigに設定を反映して保存
+                Object.entries(newSettings).forEach(([key, value]) => {
+                    appConfig.set(key, value);
+                });
+                await appConfig.save();
 
                 // stateをバリデーション後の値で更新 (背景Blobは既にstateにある)
                 state.settings = { ...state.settings, ...newSettings };
