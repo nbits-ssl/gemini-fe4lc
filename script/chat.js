@@ -262,10 +262,17 @@ class Chat {
 
     // FIXME: このメソッドは一時的な実装です。将来的に撲滅予定。
     // 現在のstateからChatインスタンスを作成するためのメソッド
-    static fromState(state, dbAdapter) {
+    static async fromState(state, dbAdapter) {
+        let title = '';
+        if (state.currentChatId) {
+            // 既存チャットの場合、DBからタイトルを取得
+            const existingChat = await dbAdapter.get(Chat.CHATS_STORE, state.currentChatId);
+            title = existingChat?.title || '';
+        }
+        
         return new Chat(
             state.currentChatId,
-            '', // タイトルは後で決定
+            title, // DBから取得したタイトル
             state.currentMessages || [],
             state.currentChatId ? null : Date.now(), // 新規なら現在時刻、更新なら後で設定
             Date.now(), // updatedAt

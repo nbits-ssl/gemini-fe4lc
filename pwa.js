@@ -470,7 +470,7 @@ const dbUtils = {
 
     // チャットを保存 (タイトル指定可)
     async saveChat(optionalTitle = null) {
-        const chat = Chat.fromState(state, dbAdapter);
+        const chat = await Chat.fromState(state, dbAdapter);
         
         if (!chat.shouldSave()) {
             return state.currentChatId; // 現在のIDを返す
