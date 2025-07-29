@@ -1,5 +1,6 @@
 class Chat {
     static CHATS_STORE = 'chats';
+    static DEFAULT_TITLE = '無題のチャット';
     
     constructor(id, title, messages, createdAt, updatedAt, options = {}, dbAdapter) {
         this.id = id;
@@ -137,8 +138,84 @@ class Chat {
     }
 
     // 保存機能
-    async save() {
-        // TODO: チャットデータをDBに保存する実装
+    async save(optionalTitle = null) {
+        const isNew = !this.id; // 保存前の状態を保持
+        const now = Date.now();
+        
+        const title = this._getTitleToSave(optionalTitle);
+        const chatData = this._chatDataToSave(title, now);
+
+        if (this.id) {
+            chatData.id = this.id;
+        }
+
+        try {
+            const savedId = await this.dbAdapter.put(Chat.CHATS_STORE, chatData);
+            
+            this.id = savedId;
+            this.title = title;
+            this.updatedAt = now;
+            if (!this.createdAt) {
+                this.createdAt = now;
+            }
+
+            console.log(`チャット ${this.id ? '更新' : '保存'} 完了 ID:`, this.id, 'タイトル:', title);
+            
+            return {
+                id: savedId,
+                title: title,
+                isNew: isNew
+            };
+        } catch (error) {
+            console.error('Chat.save error:', error);
+            throw error;
+        }
+    }
+
+    // 保存用タイトルを決定
+    _getTitleToSave(optionalTitle = null) {
+        if (optionalTitle !== null) {
+            return optionalTitle;
+        } else if (this.title) {
+            return this.title;
+        } else {
+            const firstUserMessage = this.messages.find(m => m.role === 'user');
+            return firstUserMessage ? firstUserMessage.content.substring(0, 50) : Chat.DEFAULT_TITLE;
+        }
+    }
+
+    // 保存用メッセージデータを作成
+    _messagesToSave() {
+        return this.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp,
+            thoughtSummary: msg.thoughtSummary || null,
+            ...(msg.finishReason && { finishReason: msg.finishReason }),
+            ...(msg.safetyRatings && { safetyRatings: msg.safetyRatings }),
+            ...(msg.error && { error: msg.error }),
+            ...(msg.isCascaded !== undefined && { isCascaded: msg.isCascaded }),
+            ...(msg.isSelected !== undefined && { isSelected: msg.isSelected }),
+            ...(msg.siblingGroupId !== undefined && { siblingGroupId: msg.siblingGroupId }),
+            ...(msg.groundingMetadata && { groundingMetadata: msg.groundingMetadata }),
+            ...(msg.attachments && msg.attachments.length > 0 && { attachments: msg.attachments }),
+            ...(msg.usageMetadata && { usageMetadata: msg.usageMetadata }),
+        }));
+    }
+
+    // 保存用チャットデータを構築
+    _chatDataToSave(title, now) {
+        return {
+            messages: this._messagesToSave(),
+            systemPrompt: this.systemPrompt,
+            updatedAt: now,
+            createdAt: this.createdAt || now,
+            title: title,
+            ...(this.compressedSummary && { compressedSummary: this.compressedSummary }),
+            ...(this.lastSentRequest && { lastSentRequest: this.lastSentRequest }),
+            ...(this.responseReplacer && this.responseReplacer.length > 0 && { responseReplacements: this.responseReplacer }),
+            ...(this.contextSummary && this.contextSummary.length > 0 && { contextNotes: this.contextSummary }),
+        };
     }
 
     // 更新機能
@@ -148,7 +225,17 @@ class Chat {
 
     // 削除機能
     async delete() {
-        // TODO: チャットデータをDBから削除する実装
+        if (!this.id) {
+            throw new Error('削除するチャットのIDが設定されていません');
+        }
+        
+        try {
+            await this.dbAdapter.delete(Chat.CHATS_STORE, this.id);
+            console.log(`チャット削除完了: ${this.id}`);
+        } catch (error) {
+            console.error('Chat.delete error:', error);
+            throw error;
+        }
     }
 
     // チャットが空かどうかを判定
@@ -160,5 +247,37 @@ class Chat {
     getSafeTitle() {
         const title = this.title || `chat_${this.id}_export`;
         return title.replace(/[<>:"/\\|?*\s]/g, '_');
+    }
+
+    // 保存すべきかどうかを判定
+    shouldSave() {
+        const hasContextNotes = this.contextSummary && this.contextSummary.length > 1;
+        const hasResponseReplacements = this.responseReplacer && this.responseReplacer.length > 0;
+        
+        return (this.messages && this.messages.length > 0) || 
+               this.systemPrompt || 
+               hasContextNotes || 
+               hasResponseReplacements;
+    }
+
+    // FIXME: このメソッドは一時的な実装です。将来的に撲滅予定。
+    // 現在のstateからChatインスタンスを作成するためのメソッド
+    static fromState(state, dbAdapter) {
+        return new Chat(
+            state.currentChatId,
+            '', // タイトルは後で決定
+            state.currentMessages || [],
+            state.currentChatId ? null : Date.now(), // 新規なら現在時刻、更新なら後で設定
+            Date.now(), // updatedAt
+            {
+                responseReplacer: state.responseReplacer ? state.responseReplacer.getSaveData() : [],
+                contextSummary: state.contextNote ? state.contextNote.getSaveData() : [],
+                lastSentRequest: state.lastSentRequest || null,
+                systemPrompt: state.currentSystemPrompt || '',
+                compressedSummary: state.compressedSummary || null,
+                pendingAttachments: state.pendingAttachments || []
+            },
+            dbAdapter
+        );
     }
 } 

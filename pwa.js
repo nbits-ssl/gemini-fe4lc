@@ -470,125 +470,27 @@ const dbUtils = {
 
     // チャットを保存 (タイトル指定可)
     async saveChat(optionalTitle = null) {
-        await this.openDB();
-        // メッセージもシステムプロンプトもコンテキストノートもレスポンス置き換えもない場合は保存しない
-        const hasContextNotes = state.contextNote && state.contextNote.getAllNotes().length > 1; // デフォルト仕様以外
-        const hasResponseReplacements = state.responseReplacer && state.responseReplacer.getReplacements().length > 0;
+        const chat = Chat.fromState(state, dbAdapter);
         
-        if ((!state.currentMessages || state.currentMessages.length === 0) && 
-            !state.currentSystemPrompt && 
-            !hasContextNotes && 
-            !hasResponseReplacements) {
-            if(state.currentChatId) console.log(`saveChat: 既存チャット ${state.currentChatId} に保存する内容がないため保存せず`);
-            else console.log("saveChat: 新規チャットに保存する内容がないため保存せず");
-            return Promise.resolve(state.currentChatId); // 現在のIDを返す
-        }
-
-        return new Promise((resolve, reject) => {
-            const store = this._getStore(CHATS_STORE, 'readwrite');
-            const now = Date.now();
-            // 保存するメッセージデータを作成 (必要なプロパティのみ + 新しいフラグ)
-            const messagesToSave = state.currentMessages.map(msg => ({
-                role: msg.role,
-                content: msg.content,
-                timestamp: msg.timestamp,
-                thoughtSummary: msg.thoughtSummary || null, // Thought Summary を保存
-                ...(msg.finishReason && { finishReason: msg.finishReason }),
-                ...(msg.safetyRatings && { safetyRatings: msg.safetyRatings }),
-                ...(msg.error && { error: msg.error }),
-                // 新しいフラグを追加 (存在すれば)
-                ...(msg.isCascaded !== undefined && { isCascaded: msg.isCascaded }),
-                ...(msg.isSelected !== undefined && { isSelected: msg.isSelected }),
-                ...(msg.siblingGroupId !== undefined && { siblingGroupId: msg.siblingGroupId }),
-                ...(msg.groundingMetadata && { groundingMetadata: msg.groundingMetadata }),
-                // 添付ファイル情報を追加 (存在すれば)
-                ...(msg.attachments && msg.attachments.length > 0 && { attachments: msg.attachments }),
-                // usageMetadata を追加 (存在すれば)
-                ...(msg.usageMetadata && { usageMetadata: msg.usageMetadata }),
-            }));
-
-            // タイトルを決定して保存を実行する内部関数
-            const determineTitleAndSave = (existingChatData = null) => {
-                let title;
-                if (optionalTitle !== null) { // 引数でタイトルが指定されていればそれを使う
-                    title = optionalTitle;
-                } else if (existingChatData && existingChatData.title) { // 既存データにタイトルがあればそれを使う
-                    title = existingChatData.title;
-                } else { // それ以外は最初のユーザーメッセージから生成
-                    const firstUserMessage = state.currentMessages.find(m => m.role === 'user');
-                    title = firstUserMessage ? firstUserMessage.content.substring(0, 50) : "無題のチャット";
+        if (!chat.shouldSave()) {
+            return state.currentChatId; // 現在のIDを返す
+        } else {
+            try {
+                const result = await chat.save(optionalTitle);
+                if (result.isNew) {
+                    state.currentChatId = result.id;
                 }
-
-                const chatIdForOperation = existingChatData ? existingChatData.id : state.currentChatId;
                 
-                const chatData = {
-                    messages: messagesToSave,
-                    systemPrompt: state.currentSystemPrompt, // システムプロンプトを保存
-                    updatedAt: now,
-                    createdAt: existingChatData ? existingChatData.createdAt : now, // 新規なら現在時刻
-                    title: title,
-                    // 圧縮データを保存
-                    ...(state.compressedSummary && { compressedSummary: state.compressedSummary }),
-                    // 最後に送信したリクエスト内容を保存
-                    ...(state.lastSentRequest && { lastSentRequest: state.lastSentRequest }),
-                    // レスポンス置換データを保存
-                    ...(state.responseReplacer && { responseReplacements: state.responseReplacer.getSaveData() }),
-					                    // ContextNoteデータを保存
-                    ...(state.contextNote && { contextNotes: state.contextNote.getSaveData() }),
-                };
-                if (chatIdForOperation) { // IDがあれば更新なのでIDを付与
-                    chatData.id = chatIdForOperation;
+                if (state.currentChatId === result.id) {
+                    uiUtils.updateChatTitle(result.title);
                 }
-
-                const request = store.put(chatData); // putは新規・更新両対応
-                request.onsuccess = (event) => {
-                    const savedId = event.target.result;
-                    if (!state.currentChatId && savedId) { // 新規保存でIDが確定したらstateに反映
-                        state.currentChatId = savedId;
-                    }
-                    console.log(`チャット ${state.currentChatId ? '更新' : '保存'} 完了 ID:`, state.currentChatId || savedId, 'タイトル:', chatData.title);
-                    // 保存したチャットが現在表示中のものなら、タイトルをUIに反映
-                    if ((state.currentChatId || savedId) === (chatIdForOperation || savedId)) {
-                        uiUtils.updateChatTitle(chatData.title);
-                    }
-                    resolve(state.currentChatId || savedId); // 保存/更新後のIDを返す
-                };
-                request.onerror = (event) => reject(`チャット保存エラー: ${event.target.error}`);
-            };
-
-            // 現在のチャットIDがあるか (更新か新規か)
-            if (state.currentChatId) {
-                // 更新の場合、既存のデータを取得してcreatedAtを引き継ぐ
-                const getRequest = store.get(state.currentChatId);
-                getRequest.onsuccess = (event) => {
-                    const existingChat = event.target.result;
-                        if (!existingChat) { // IDはあるがデータがない場合 (削除されたなど) は新規として保存
-                            console.warn(`ID ${state.currentChatId} のチャットが見つかりません(保存時)。新規として保存します。`);
-                            state.currentChatId = null; // IDをリセット
-                            determineTitleAndSave(null);
-                    } else {
-                        determineTitleAndSave(existingChat); // 既存データを使って保存
-                    }
-                };
-                getRequest.onerror = (event) => {
-                    // 既存データの取得に失敗した場合も、とりあえず新規として保存を試みる
-                    console.error("既存チャットの取得エラー(更新用):", event.target.error);
-                    console.warn("既存チャット取得エラーのため、新規として保存を試みます。");
-                    state.currentChatId = null; // IDをリセット
-                    determineTitleAndSave(null);
-                };
-            } else {
-                // 新規保存の場合
-                determineTitleAndSave(null);
+                
+                return result.id;
+            } catch (error) {
+                console.error('saveChat error:', error);
+                throw error;
             }
-
-            // トランザクション全体のエラーハンドリング
-            store.transaction.onerror = (event) => {
-                console.error("チャット保存トランザクション失敗:", event.target.error);
-                reject(`チャット保存トランザクション失敗: ${event.target.error}`);
-            };
-            // store.transaction.oncomplete = () => { console.log("チャット保存トランザクション完了"); };
-        });
+        }
     },
 
     // チャットタイトルをDBで更新
@@ -655,17 +557,6 @@ const dbUtils = {
                 }
             };
             request.onerror = (event) => reject(`全チャット取得エラー (${sortBy}順): ${event.target.error}`);
-        });
-    },
-
-    // 指定IDのチャットを削除
-    async deleteChat(id) {
-        await this.openDB();
-        return new Promise((resolve, reject) => {
-            const store = this._getStore(CHATS_STORE, 'readwrite');
-            const request = store.delete(id);
-            request.onsuccess = () => { console.log("チャット削除:", id); resolve(); };
-            request.onerror = (event) => reject(`チャット ${id} 削除エラー: ${event.target.error}`);
         });
     },
 
@@ -3123,7 +3014,11 @@ const appLogic = {
 
             try {
                 // 1. DBから削除
-                await dbUtils.deleteChat(id);
+                const chat = await Chat.getChat(id, dbAdapter);
+                if (!chat) {
+                    throw new Error(`チャットID ${id} が見つかりません`);
+                }
+                await chat.delete();
                 console.log("チャット削除:", id);
 
                 // 2. 表示中チャット削除なら内部状態リセット
