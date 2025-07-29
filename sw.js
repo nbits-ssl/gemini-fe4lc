@@ -8,6 +8,7 @@ const urlsToCache = [
   './fe4lc.js',
   './styles.css',
   './marked.js',
+  './script/chat.js',
   './script/AppConfig.js',
   './script/ContextNote.js',
   './script/ContextNoteUI.js',

@@ -219,6 +219,9 @@ const elements = {
 const dbAdapter = new IndexedDBAdapter(DB_NAME, DB_VERSION);
 const appConfig = new AppConfig({}, dbAdapter, SETTINGS_STORE);
 
+// Chatクラスの定数を上書き
+Chat.CHATS_STORE = CHATS_STORE;
+
 // --- アプリ状態 ---
 const state = {
     db: null,
@@ -720,87 +723,6 @@ const dbUtils = {
         });
     },
 
-
-
-    // チャットをテキストファイルとしてエクスポート
-    async exportChatAsText(chatId, chatTitle) {
-        try {
-            const chat = await this.getChat(chatId);
-            if (!chat || ((!chat.messages || chat.messages.length === 0) && !chat.systemPrompt)) {
-                await uiUtils.showCustomAlert("チャットデータが空です。");
-                return;
-            }
-            // エクスポート用テキスト生成
-            let exportText = '';
-            // システムプロンプトを出力
-            if (chat.systemPrompt) {
-                exportText += `<|#|system|#|>\n${chat.systemPrompt}\n<|#|/system|#|>\n\n`;
-            }
-            // メッセージを出力
-            if (chat.messages) {
-                chat.messages.forEach(msg => {
-                    // userとmodelのメッセージのみ出力
-                    if (msg.role === 'user' || msg.role === 'model') {
-                        let attributes = '';
-                        if (msg.role === 'model') {
-                            if (msg.isCascaded) attributes += ' isCascaded';
-                            if (msg.isSelected) attributes += ' isSelected';
-                            // siblingGroupId はエクスポートしない方針
-                        }
-                        // 添付ファイル情報を属性として追加 (ファイル名のみ)
-                        if (msg.role === 'user' && msg.attachments && msg.attachments.length > 0) {
-                            const fileNames = msg.attachments.map(a => a.name).join(';'); // ファイル名をセミコロン区切りで
-                            attributes += ` attachments="${fileNames.replace(/"/g, '&quot;')}"`; // 属性値としてエンコード
-                        }
-                        exportText += `<|#|${msg.role}|#|${attributes}>\n${msg.content}\n<|#|/${msg.role}|#|>\n\n`;
-                    }
-                });
-            }
-            // Blobを作成してダウンロードリンクを生成
-            const blob = new Blob([exportText.trim()], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            // ファイル名を生成 (不正文字を置換)
-            const safeTitle = (chatTitle || `chat_${chatId}_export`).replace(/[<>:"/\\|?*\s]/g, '_');
-            a.href = url;
-            a.download = `${safeTitle}.txt`;
-            document.body.appendChild(a); // bodyに追加してクリック可能に
-            a.click(); // ダウンロード実行
-            document.body.removeChild(a); // 要素削除
-            URL.revokeObjectURL(url); // URL破棄
-            console.log("チャットテキストエクスポート完了:", chatId);
-        } catch (error) {
-            await uiUtils.showCustomAlert(`エクスポートエラー: ${error}`);
-        }
-    },
-
-    // チャットデータをJSON形式でエクスポート用に準備
-    async prepareChatForExport(chatId) {
-        const chat = await this.getChat(chatId);
-        if (!chat) {
-            throw new Error("チャットデータが見つかりません。");
-        }
-
-        return {
-            version: "1.0",
-            exportDate: new Date().toISOString(),
-            appVersion: APP_VERSION,
-            fe4lcVersion: FE4LC_APP_VERSION,
-            chat: {
-                id: chat.id,
-                title: chat.title,
-                createdAt: chat.createdAt,
-                updatedAt: chat.updatedAt,
-                systemPrompt: chat.systemPrompt || '',
-                messages: chat.messages || [],
-                compressedSummary: chat.compressedSummary || null,
-                lastSentRequest: chat.lastSentRequest || null,
-                responseReplacements: chat.responseReplacements || [],
-                contextNotes: chat.contextNotes || []
-            }
-        };
-    },
-
     // 全データをJSON形式でエクスポート用に準備
     async prepareAllDataForExport() {
         // 全チャットデータを取得
@@ -820,21 +742,6 @@ const dbUtils = {
             chats: allChats,
             settings: exportSettings
         };
-    },
-
-    // JSONデータをファイルとしてダウンロード
-    downloadJSONFile(data, filename) {
-        const jsonString = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
     },
 
     // JSONファイルを読み込んでパース
@@ -2003,6 +1910,20 @@ const uiUtils = {
         return result; // 入力値またはnullを返す
     },
 
+    // ファイルダウンロードの共通処理
+    makeDownloadFile(data, filename, mimeType) {
+        const blob = new Blob([data], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
     // 添付ファイルバッジの表示/非表示を更新する関数
     updateAttachmentBadgeVisibility() {
         const hasAttachments = state.pendingAttachments.length > 0;
@@ -2533,16 +2454,16 @@ const appLogic = {
         // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
         state.responseReplacerUI.renderList();
             // ContextNoteを読み込み（現在のチャットデータがない場合は空で初期化）
-    await this.loadContextNotesFromChat();
-    
-    // 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
-    if (state.contextNote.getAllNotes().length === 0) {
-        this.addDefaultContextNoteSpec();
-    }
-    
-    // ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
-    state.contextNoteUI.renderList();
-        uiUtils.showScreen('chat-info');
+		await this.loadContextNotesFromChat();
+		
+		// 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
+		if (state.contextNote.getAllNotes().length === 0) {
+			this.addDefaultContextNoteSpec();
+		}
+		
+		// ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
+		state.contextNoteUI.renderList();
+			uiUtils.showScreen('chat-info');
 		});
         
         // 圧縮破棄ボタン
@@ -2635,7 +2556,7 @@ const appLogic = {
             // 注意: 変更は「設定を保存」ボタンクリック時にDBに保存される
         });
 
-            // 背景画像ボタンリスナー
+		// 背景画像ボタンリスナー
         elements.uploadBackgroundBtn.addEventListener('click', () => elements.backgroundImageInput.click()); // ファイル選択ダイアログを開く
         elements.backgroundImageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
@@ -5136,20 +5057,36 @@ const appLogic = {
 
     // チャットをテキストファイルとしてエクスポート
     async exportChatAsText(chatId, chatTitle) {
-        return await dbUtils.exportChatAsText(chatId, chatTitle);
+        try {
+            const chat = await Chat.getChat(chatId, dbAdapter);
+            if (!chat || chat.isEmpty()) {
+                await uiUtils.showCustomAlert("チャットデータが空です。");
+                return;
+            }
+            
+            const exportText = chat.exportAsText();
+            const safeTitle = chat.getSafeTitle();
+            uiUtils.makeDownloadFile(exportText, `${safeTitle}.txt`, 'text/plain;charset=utf-8');
+        } catch (error) {
+            await uiUtils.showCustomAlert(`エクスポートエラー: ${error}`);
+        }
     },
 
     // チャットを完全なJSONファイルとしてエクスポート
     async exportChatAsJSON(chatId, chatTitle) {
         try {
-            const exportData = await dbUtils.prepareChatForExport(chatId);
-            const safeTitle = (chatTitle || `chat_${chatId}_export`).replace(/[<>:"/\\|?*\s]/g, '_');
+            const chat = await Chat.getChat(chatId, dbAdapter);
+            if (!chat) {
+                await uiUtils.showCustomAlert("チャットデータが見つかりません。");
+                return;
+            }
+            
+            const exportData = chat.exportAsJSON();
+            const safeTitle = chat.getSafeTitle();
             const filename = `${safeTitle}_complete.json`;
             
-            dbUtils.downloadJSONFile(exportData, filename);
-            console.log("チャット完全エクスポート完了:", chatId);
+            uiUtils.makeDownloadFile(JSON.stringify(exportData, null, 2), filename, 'application/json;charset=utf-8');
         } catch (error) {
-            console.error("エクスポートエラー:", error);
             await uiUtils.showCustomAlert(`エクスポートエラー: ${error.message}`);
         }
     },
@@ -5183,7 +5120,7 @@ const appLogic = {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const filename = `${DB_NAME.toLowerCase()}_backup_${timestamp}.json`;
             
-            dbUtils.downloadJSONFile(exportData, filename);
+            uiUtils.makeDownloadFile(JSON.stringify(exportData, null, 2), filename, 'application/json;charset=utf-8');
             console.log("全データバックアップ完了:", exportData.chats.length, "チャット");
         } catch (error) {
             console.error("バックアップエラー:", error);
@@ -5239,6 +5176,3 @@ const appLogic = {
     }
 
 }; // appLogic終了
-
-window.ResponseReplacer = ResponseReplacer;
-window.ContextNote = ContextNote;
