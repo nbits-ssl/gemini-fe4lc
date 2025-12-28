@@ -317,13 +317,20 @@ class ContextNote {
     }
 
     /**
-     * マッチしたノートの文字列を取得（キーワードマッチ+ランダムマッチ）
+     * マッチしたノートの文字列を取得（キーワードマッチ+ランダムマッチを分離して返す）
      * @param {string} text - マッチング対象のテキスト
      * @param {number} randomFrequency - ランダム選択の確率（0.0-1.0）
      * @param {number} randomCount - ランダム選択するノートの数
-     * @returns {Object} { text: string, charCount: number, matchCount: number } マッチしたノートの情報
+     * @returns {Object} { 
+     *   keywordText: string, 
+     *   momentText: string, 
+     *   keywordCharCount: number, 
+     *   momentCharCount: number,
+     *   keywordMatchCount: number,
+     *   momentMatchCount: number
+     * } マッチしたノートの情報（キーワードとモーメントを分離）
      */
-    getMatchedNotesString(text, randomFrequency = 0.3, randomCount = 1) {
+    getMatchedNotesSeparated(text, randomFrequency = 0.3, randomCount = 1) {
         // キーワードマッチのノート配列を取得
         const keywordMatchedNotes = this.getKeywordMatchedNotes(text);
         
@@ -333,16 +340,17 @@ class ContextNote {
             randomMatchedNotes = this.getRandomMatchedNotesArray(randomCount);
         }
         
-        // 全マッチしたノートを結合
-        const allMatchedNotes = [...keywordMatchedNotes, ...randomMatchedNotes];
-        
-        // 文字列を生成
-        const resultText = this.buildNoteString(allMatchedNotes);
+        // 各タイプの文字列を生成
+        const keywordText = this.buildNoteString(keywordMatchedNotes);
+        const momentText = this.buildNoteString(randomMatchedNotes);
         
         return {
-            text: resultText,
-            charCount: resultText.length,
-            matchCount: allMatchedNotes.length
+            keywordText: keywordText,
+            momentText: momentText,
+            keywordCharCount: keywordText.length,
+            momentCharCount: momentText.length,
+            keywordMatchCount: keywordMatchedNotes.length,
+            momentMatchCount: randomMatchedNotes.length
         };
     }
 

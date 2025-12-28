@@ -13,7 +13,7 @@ const IMPORT_PREFIX = '(取込) ';
 const LIGHT_THEME_COLOR = '#4a90e2';
 const DARK_THEME_COLOR = '#007aff';
 const APP_VERSION = "0.26"; // Thought summaries対応、streamingのバグ修正
-const FE4LC_APP_VERSION = "202507-CC"; 
+const FE4LC_APP_VERSION = "202507-CC";
 const APP_NAME = "Gemini FE4LC";
 const SWIPE_THRESHOLD = 50; // スワイプ判定の閾値 (px)
 const ZOOM_THRESHOLD = 1.01; // ズーム状態と判定するスケールの閾値 (誤差考慮)
@@ -24,6 +24,10 @@ const MAX_TOTAL_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 1メッセージあたり
 const CONTEXT_NOTE_ROLE = 'contextmessage';
 const REFERENCE_TAG_START = '<reference>';
 const REFERENCE_TAG_END = '</reference>';
+const REFERENCE_MOMENT_TAG_START = '<reference moment>';
+const REFERENCE_MOMENT_TAG_END = '</reference moment>';
+const REFERENCE_KEYWORD_TAG_START = '<reference keyword>';
+const REFERENCE_KEYWORD_TAG_END = '</reference keyword>';
 
 // 添付を確定する処理
 const extensionToMimeTypeMap = {
@@ -158,7 +162,7 @@ const elements = {
     yamlErrorMessage: document.getElementById('yaml-error-message'),
     saveYamlBtn: document.getElementById('save-yaml-btn'),
     cancelYamlBtn: document.getElementById('cancel-yaml-btn'),
-    
+
     // レスポンス置き換え直接編集モーダル要素
     responseReplacementsDirectEditModal: document.getElementById('response-replacements-direct-edit-modal'),
     editResponseReplacementsDirectlyBtn: document.getElementById('edit-response-replacements-directly-btn'),
@@ -181,12 +185,12 @@ const elements = {
     saveSettingsBtns: document.querySelectorAll('.js-save-settings-btn'),
     updateAppBtn: document.getElementById('update-app-btn'),
     clearDataBtn: document.getElementById('clear-data-btn'),
-    
+
     // データバックアップ・復元ボタン
     backupDataBtn: document.getElementById('backup-data-btn'),
     restoreDataBtn: document.getElementById('restore-data-btn'),
     restoreDataInput: document.getElementById('restore-data-input'),
-    
+
     importJsonBtn: document.getElementById('import-json-btn'), // JSON履歴インポートボタン
     importJsonInput: document.getElementById('import-json-input'), // JSONインポートファイル入力
     // カスタムダイアログ
@@ -289,11 +293,11 @@ function filterMessagesForApi(messages) {
 function calculateInsertionIndex(priority, baseMessages) {
     // priority: 1-5の値
     // baseMessages: 現在のメッセージ配列
-    
+
     if (priority <= 0 || priority > 5) {
         return baseMessages.length; // デフォルトは最後に追加
     }
-    
+
     // ユーザーメッセージのインデックスを取得
     const userMessageIndices = [];
     for (let i = 0; i < baseMessages.length; i++) {
@@ -301,11 +305,11 @@ function calculateInsertionIndex(priority, baseMessages) {
             userMessageIndices.push(i);
         }
     }
-    
+
     if (userMessageIndices.length === 0) {
         return baseMessages.length; // ユーザーメッセージがない場合は最後に追加
     }
-    
+
     // 優先度に基づいて挿入位置を決定（ユーザーメッセージの上のみ）
     // 1=最新ユーザーの上、2=2番目のユーザーの上、3=3番目のユーザーの上...
     // ただし、第1投の上には配置しない（最高でも2投目の上まで）
@@ -313,7 +317,7 @@ function calculateInsertionIndex(priority, baseMessages) {
     const maxPriority = Math.min(priority, userMessageIndices.length - 1);
     const targetIndex = Math.min(maxPriority - 1, userMessageIndices.length - 2);
     const baseInsertionIndex = userMessageIndices[userMessageIndices.length - targetIndex - 1];
-    
+
     // 第1投の場合は、システムメッセージの直後（第1投の直後）に挿入
     if (targetIndex === userMessageIndices.length - 2) {
         // システムメッセージの位置を探す
@@ -324,7 +328,7 @@ function calculateInsertionIndex(priority, baseMessages) {
         }
         return baseInsertionIndex + 1; // システムメッセージが見つからない場合は第1投の直後
     }
-    
+
     return baseInsertionIndex;
 }
 
@@ -417,7 +421,7 @@ const dbUtils = {
                     chatStore = db.createObjectStore(CHATS_STORE, { keyPath: 'id', autoIncrement: true });
                     console.log(`オブジェクトストア ${CHATS_STORE} 作成`);
                 } else {
-                        if (transaction) {
+                    if (transaction) {
                         try { chatStore = transaction.objectStore(CHATS_STORE); } catch (e) { console.error("チャットストアの取得中にエラー(アップグレード):", e); return; }
                     } else { console.warn("チャットストアのアップグレード用トランザクション取得失敗"); }
                 }
@@ -460,7 +464,7 @@ const dbUtils = {
     // 全設定を読み込み
     async loadSettings() {
         await appConfig.load();
-		
+
         // ダークモードのOS設定を初期適用
         if (appConfig.get('darkMode') !== true && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             appConfig.set('darkMode', true);
@@ -471,7 +475,7 @@ const dbUtils = {
     // チャットを保存 (タイトル指定可)
     async saveChat(optionalTitle = null) {
         const chat = await Chat.fromState(state, dbAdapter);
-        
+
         if (!chat.shouldSave()) {
             return state.currentChatId; // 現在のIDを返す
         } else {
@@ -480,11 +484,11 @@ const dbUtils = {
                 if (result.isNew) {
                     state.currentChatId = result.id;
                 }
-                
+
                 if (state.currentChatId === result.id) {
                     uiUtils.updateChatTitle(result.title);
                 }
-                
+
                 return result.id;
             } catch (error) {
                 console.error('saveChat error:', error);
@@ -535,12 +539,12 @@ const dbUtils = {
             const indexName = sortBy === 'createdAt' ? CHAT_CREATEDAT_INDEX : CHAT_UPDATEDAT_INDEX;
             // インデックスが存在するか確認
             if (!store.indexNames.contains(indexName)) {
-                    console.error(`インデックス "${indexName}" が見つかりません。主キー順でフォールバックします。`);
-                    // フォールバック: 主キー順で取得して逆順にする
-                    const getAllRequest = store.getAll();
-                    getAllRequest.onsuccess = (event) => resolve(event.target.result.reverse()); // 新しいものが上に来るように
-                    getAllRequest.onerror = (event) => reject(`全チャット取得エラー(フォールバック): ${event.target.error}`);
-                    return;
+                console.error(`インデックス "${indexName}" が見つかりません。主キー順でフォールバックします。`);
+                // フォールバック: 主キー順で取得して逆順にする
+                const getAllRequest = store.getAll();
+                getAllRequest.onsuccess = (event) => resolve(event.target.result.reverse()); // 新しいものが上に来るように
+                getAllRequest.onerror = (event) => reject(`全チャット取得エラー(フォールバック): ${event.target.error}`);
+                return;
             }
             // インデックスを使ってカーソルを開く (降順)
             const index = store.index(indexName);
@@ -595,12 +599,12 @@ const dbUtils = {
     async prepareAllDataForExport() {
         // 全チャットデータを取得
         const allChats = await this.getAllChats();
-        
+
         // 全設定を取得（APIキー以外）
         const allSettings = await this.loadSettings();
         const exportSettings = { ...allSettings };
         delete exportSettings.apiKey; // APIキーは除外
-        
+
         return {
             version: "1.0",
             exportDate: new Date().toISOString(),
@@ -687,7 +691,7 @@ const dbUtils = {
     async restoreAllDataFromImport(importData) {
         // 既存データをクリア
         await this.clearAllData();
-        
+
         // チャットデータを復元
         let restoredChatCount = 0;
         if (importData.chats && Array.isArray(importData.chats)) {
@@ -700,7 +704,7 @@ const dbUtils = {
                 }
             }
         }
-        
+
         // 設定データを復元（APIキー以外）
         if (importData.settings && typeof importData.settings === 'object') {
             for (const [key, value] of Object.entries(importData.settings)) {
@@ -723,7 +727,7 @@ const uiUtils = {
         // 編集中ならキャンセル
         if (state.editingMessageIndex !== null) {
             const messageElement = elements.messageContainer.querySelector(`.message[data-index="${state.editingMessageIndex}"]`);
-            if(messageElement) appLogic.cancelEditMessage(state.editingMessageIndex, messageElement);
+            if (messageElement) appLogic.cancelEditMessage(state.editingMessageIndex, messageElement);
             else state.editingMessageIndex = null; // 要素が見つからない場合もインデックスをリセット
         }
         elements.messageContainer.innerHTML = ''; // コンテナをクリア
@@ -772,12 +776,12 @@ const uiUtils = {
             }
         }
         //this.scrollToBottom(); // 最下部へスクロールは削除、呼び出し元の責任で行う
-        
+
         // トークン表示を更新
         if (typeof tokenUtils !== 'undefined') {
             tokenUtils.updateTokenDisplay();
         }
-        
+
         // ContextNoteシステムメッセージを表示
         try {
             appLogic.displayContextNoteSystemMessage();
@@ -793,13 +797,13 @@ const uiUtils = {
         messageDiv.dataset.index = index; // state.currentMessages 内のインデックス
 
         const messageData = skipStateUpdate ? undefined : state.currentMessages[index]; // メッセージデータを取得
-        
+
         // Safety Ratings用のクラスを追加
         if (role === 'model' && messageData && messageData.safetyRatings) {
             const sexuallyExplicitRating = messageData.safetyRatings.find(
                 rating => rating.category === 'HARM_CATEGORY_SEXUALLY_EXPLICIT'
             );
-            
+
             if (sexuallyExplicitRating) {
                 switch (sexuallyExplicitRating.probability) {
                     case 'HIGH':
@@ -815,7 +819,7 @@ const uiUtils = {
                 }
             }
         }
-        
+
         // Thought Summary 表示エリア (モデル応答で thoughtSummary がある場合)
         if (role === 'model' && messageData && messageData.thoughtSummary) {
             const thoughtDetails = document.createElement('details');
@@ -845,7 +849,7 @@ const uiUtils = {
 
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
-        
+
         // ユーザーメッセージで添付ファイルがある場合の処理
         if (role === 'user' && attachments && attachments.length > 0) {
             const details = document.createElement('details');
@@ -882,24 +886,23 @@ const uiUtils = {
                 } else if (role === 'user') { // 添付ファイルがないユーザーメッセージ
                     const pre = document.createElement('pre'); pre.textContent = content; contentDiv.appendChild(pre);
                 } else if (role === 'error') {
-                        const p = document.createElement('p'); p.textContent = content; contentDiv.appendChild(p);
+                    const p = document.createElement('p'); p.textContent = content; contentDiv.appendChild(p);
                 } else if (isStreamingPlaceholder) {
                     contentDiv.innerHTML = '';
                 } else {
                     const pre = document.createElement('pre'); pre.textContent = content; contentDiv.appendChild(pre);
                 }
             } catch (e) {
-                    console.error("Markdownパースエラー:", e);
-                    const pre = document.createElement('pre'); pre.textContent = content; contentDiv.innerHTML = ''; contentDiv.appendChild(pre);
+                console.error("Markdownパースエラー:", e);
+                const pre = document.createElement('pre'); pre.textContent = content; contentDiv.innerHTML = ''; contentDiv.appendChild(pre);
             }
         }
         messageDiv.appendChild(contentDiv);
-        
+
         if (role === 'model' && messageData && messageData.groundingMetadata &&
-            ( (messageData.groundingMetadata.groundingChunks && messageData.groundingMetadata.groundingChunks.length > 0) ||
-                (messageData.groundingMetadata.webSearchQueries && messageData.groundingMetadata.webSearchQueries.length > 0) )
-            )
-        {
+            ((messageData.groundingMetadata.groundingChunks && messageData.groundingMetadata.groundingChunks.length > 0) ||
+                (messageData.groundingMetadata.webSearchQueries && messageData.groundingMetadata.webSearchQueries.length > 0))
+        ) {
             try {
                 const details = document.createElement('details');
                 details.classList.add('citation-details'); // 既存のクラスを使用
@@ -938,7 +941,7 @@ const uiUtils = {
                     }
 
                     const sortedCitations = Array.from(citationMap.entries())
-                                                .sort(([, a], [, b]) => a.displayIndex - b.displayIndex);
+                        .sort(([, a], [, b]) => a.displayIndex - b.displayIndex);
 
                     sortedCitations.forEach(([chunkIndex, citationInfo]) => {
                         const listItem = document.createElement('li');
@@ -954,19 +957,19 @@ const uiUtils = {
 
                     // フォールバック
                     if (sortedCitations.length === 0) {
-                            messageData.groundingMetadata.groundingChunks.forEach((chunk, idx) => {
-                                if (chunk?.web?.uri) {
-                                    const listItem = document.createElement('li');
-                                    const link = document.createElement('a');
-                                    link.href = chunk.web.uri;
-                                    link.textContent = chunk.web.title || `ソース ${idx + 1}`;
-                                    link.title = chunk.web.title || 'タイトル不明';
-                                    link.target = '_blank';
-                                    link.rel = 'noopener noreferrer';
-                                    listItem.appendChild(link);
-                                    citationList.appendChild(listItem);
-                                }
-                            });
+                        messageData.groundingMetadata.groundingChunks.forEach((chunk, idx) => {
+                            if (chunk?.web?.uri) {
+                                const listItem = document.createElement('li');
+                                const link = document.createElement('a');
+                                link.href = chunk.web.uri;
+                                link.textContent = chunk.web.title || `ソース ${idx + 1}`;
+                                link.title = chunk.web.title || 'タイトル不明';
+                                link.target = '_blank';
+                                link.rel = 'noopener noreferrer';
+                                listItem.appendChild(link);
+                                citationList.appendChild(listItem);
+                            }
+                        });
                     }
 
                     if (citationList.hasChildNodes()) {
@@ -1075,7 +1078,7 @@ const uiUtils = {
         if (role !== 'error') {
             const actionsDiv = document.createElement('div');
             actionsDiv.classList.add('message-actions');
-            
+
             // 一時的なメッセージ（skipStateUpdate = true）の場合は削除ボタンのみ表示
             if (skipStateUpdate) {
                 // 削除ボタン（表示のみ削除）
@@ -1096,8 +1099,8 @@ const uiUtils = {
 
                 // 削除ボタン (メッセージペア全体削除) - 第1投は無効化
                 const deleteButton = document.createElement('button');
-                deleteButton.textContent = '削除'; 
-                deleteButton.title = index === 0 ? '第1投は削除できません' : 'この会話ターンを削除'; 
+                deleteButton.textContent = '削除';
+                deleteButton.title = index === 0 ? '第1投は削除できません' : 'この会話ターンを削除';
                 deleteButton.classList.add('js-delete-btn');
                 if (index === 0) {
                     deleteButton.disabled = true;
@@ -1116,13 +1119,12 @@ const uiUtils = {
                     actionsDiv.appendChild(retryButton);
                 }
             }
-            
+
             // const messageData = state.currentMessages[index]; // 上で取得済みなので再利用
             // モデル応答で、usageMetadata があり、必要なトークン数が数値として存在する場合
             if (role === 'model' && messageData?.usageMetadata &&
                 typeof messageData.usageMetadata.candidatesTokenCount === 'number' &&
-                typeof messageData.usageMetadata.totalTokenCount === 'number')
-            {
+                typeof messageData.usageMetadata.totalTokenCount === 'number') {
                 const usage = messageData.usageMetadata;
                 const tokenSpan = document.createElement('span');
                 tokenSpan.classList.add('token-count-display'); // スタイル適用用のクラス
@@ -1149,7 +1151,7 @@ const uiUtils = {
             messageDiv.id = `streaming-message-${index}`;
         }
         elements.messageContainer.appendChild(messageDiv);
-        
+
         // トークン表示を更新
         if (typeof tokenUtils !== 'undefined') {
             tokenUtils.updateTokenDisplay();
@@ -1214,13 +1216,13 @@ const uiUtils = {
             // stateから最終的なコンテンツを取得
             const finalRawContent = finalMessageData.content || '';
             if (contentDiv && typeof marked !== 'undefined') {
-                    try {
-                        // 最終コンテンツをMarkdownとしてパース
-                        contentDiv.innerHTML = marked.parse(finalRawContent);
-                    } catch (e) {
-                        console.error("ストリーミング完了時のMarkdownパースエラー:", e);
-                        contentDiv.textContent = finalRawContent; // エラー時はテキスト表示
-                    }
+                try {
+                    // 最終コンテンツをMarkdownとしてパース
+                    contentDiv.innerHTML = marked.parse(finalRawContent);
+                } catch (e) {
+                    console.error("ストリーミング完了時のMarkdownパースエラー:", e);
+                    contentDiv.textContent = finalRawContent; // エラー時はテキスト表示
+                }
             } else if (contentDiv) {
                 contentDiv.textContent = finalRawContent; // markedがない場合のフォールバック
             }
@@ -1239,7 +1241,7 @@ const uiUtils = {
             }
         }
         this.scrollToBottom(); // 最後にスクロール
-        
+
         // トークン表示を更新
         if (typeof tokenUtils !== 'undefined') {
             tokenUtils.updateTokenDisplay();
@@ -1296,7 +1298,7 @@ const uiUtils = {
                 }
             }
             // タイトルを切り詰める
-            if(baseTitle) {
+            if (baseTitle) {
                 // インポート接頭辞を除いて切り詰める
                 const displayBase = baseTitle.startsWith(IMPORT_PREFIX) ? baseTitle.substring(IMPORT_PREFIX.length) : baseTitle;
                 const truncated = displayBase.substring(0, CHAT_TITLE_LENGTH);
@@ -1305,7 +1307,7 @@ const uiUtils = {
                 if (baseTitle.startsWith(IMPORT_PREFIX)) {
                     titleText = IMPORT_PREFIX + titleText;
                 }
-            } else if(state.currentMessages.length > 0) { // メッセージがあれば (SPは考慮しない)
+            } else if (state.currentMessages.length > 0) { // メッセージがあれば (SPは考慮しない)
                 titleText = 'チャット履歴';
             }
             // メッセージがあるのにタイトルが「新規チャット」のままなら変更
@@ -1536,12 +1538,12 @@ const uiUtils = {
     showScreen(screenName, fromPopState = false) {
         // 編集中ならキャンセル
         if (state.editingMessageIndex !== null) {
-                const messageElement = elements.messageContainer.querySelector(`.message[data-index="${state.editingMessageIndex}"]`);
-                if (messageElement) { // 要素が存在する場合のみキャンセル処理
+            const messageElement = elements.messageContainer.querySelector(`.message[data-index="${state.editingMessageIndex}"]`);
+            if (messageElement) { // 要素が存在する場合のみキャンセル処理
                 appLogic.cancelEditMessage(state.editingMessageIndex, messageElement);
-                } else {
+            } else {
                 state.editingMessageIndex = null; // 要素が見つからない場合はインデックスのみリセット
-                }
+            }
         }
         // システムプロンプト編集中ならキャンセル
         if (state.isEditingSystemPrompt) {
@@ -1700,23 +1702,23 @@ const uiUtils = {
     // アラートダイアログ表示
     async showCustomAlert(message) {
         elements.alertMessage.textContent = message;
-            // ボタンのイベントリスナーが重複しないように複製して置き換え
-            const newOkBtn = elements.alertOkBtn.cloneNode(true);
-            elements.alertOkBtn.parentNode.replaceChild(newOkBtn, elements.alertOkBtn);
-            elements.alertOkBtn = newOkBtn;
+        // ボタンのイベントリスナーが重複しないように複製して置き換え
+        const newOkBtn = elements.alertOkBtn.cloneNode(true);
+        elements.alertOkBtn.parentNode.replaceChild(newOkBtn, elements.alertOkBtn);
+        elements.alertOkBtn = newOkBtn;
         elements.alertOkBtn.onclick = () => elements.alertDialog.close('ok');
         await this.showCustomDialog(elements.alertDialog, elements.alertOkBtn);
     },
     // 確認ダイアログ表示
     async showCustomConfirm(message) {
         elements.confirmMessage.textContent = message;
-            // ボタンのイベントリスナーが重複しないように複製して置き換え
-            const newOkBtn = elements.confirmOkBtn.cloneNode(true);
-            elements.confirmOkBtn.parentNode.replaceChild(newOkBtn, elements.confirmOkBtn);
-            elements.confirmOkBtn = newOkBtn;
-            const newCancelBtn = elements.confirmCancelBtn.cloneNode(true);
-            elements.confirmCancelBtn.parentNode.replaceChild(newCancelBtn, elements.confirmCancelBtn);
-            elements.confirmCancelBtn = newCancelBtn;
+        // ボタンのイベントリスナーが重複しないように複製して置き換え
+        const newOkBtn = elements.confirmOkBtn.cloneNode(true);
+        elements.confirmOkBtn.parentNode.replaceChild(newOkBtn, elements.confirmOkBtn);
+        elements.confirmOkBtn = newOkBtn;
+        const newCancelBtn = elements.confirmCancelBtn.cloneNode(true);
+        elements.confirmCancelBtn.parentNode.replaceChild(newCancelBtn, elements.confirmCancelBtn);
+        elements.confirmCancelBtn = newCancelBtn;
 
         elements.confirmOkBtn.onclick = () => elements.confirmDialog.close('ok');
         elements.confirmCancelBtn.onclick = () => elements.confirmDialog.close('cancel');
@@ -1727,13 +1729,13 @@ const uiUtils = {
     // はい・いいえダイアログ表示
     async showCustomYesNo(message) {
         elements.yesNoMessage.textContent = message;
-            // ボタンのイベントリスナーが重複しないように複製して置き換え
-            const newYesBtn = elements.yesNoYesBtn.cloneNode(true);
-            elements.yesNoYesBtn.parentNode.replaceChild(newYesBtn, elements.yesNoYesBtn);
-            elements.yesNoYesBtn = newYesBtn;
-            const newNoBtn = elements.yesNoNoBtn.cloneNode(true);
-            elements.yesNoNoBtn.parentNode.replaceChild(newNoBtn, elements.yesNoNoBtn);
-            elements.yesNoNoBtn = newNoBtn;
+        // ボタンのイベントリスナーが重複しないように複製して置き換え
+        const newYesBtn = elements.yesNoYesBtn.cloneNode(true);
+        elements.yesNoYesBtn.parentNode.replaceChild(newYesBtn, elements.yesNoYesBtn);
+        elements.yesNoYesBtn = newYesBtn;
+        const newNoBtn = elements.yesNoNoBtn.cloneNode(true);
+        elements.yesNoNoBtn.parentNode.replaceChild(newNoBtn, elements.yesNoNoBtn);
+        elements.yesNoNoBtn = newNoBtn;
 
         elements.yesNoYesBtn.onclick = () => elements.yesNoDialog.close('yes');
         elements.yesNoNoBtn.onclick = () => elements.yesNoDialog.close('no');
@@ -1744,16 +1746,16 @@ const uiUtils = {
     async showCustomPrompt(message, defaultValue = '') {
         elements.promptMessage.textContent = message;
         elements.promptInput.value = defaultValue;
-            // ボタンと入力欄のイベントリスナーが重複しないように複製して置き換え
-            const newOkBtn = elements.promptOkBtn.cloneNode(true);
-            elements.promptOkBtn.parentNode.replaceChild(newOkBtn, elements.promptOkBtn);
-            elements.promptOkBtn = newOkBtn;
-            const newCancelBtn = elements.promptCancelBtn.cloneNode(true);
-            elements.promptCancelBtn.parentNode.replaceChild(newCancelBtn, elements.promptCancelBtn);
-            elements.promptCancelBtn = newCancelBtn;
-            const newPromptInput = elements.promptInput.cloneNode(true);
-            elements.promptInput.parentNode.replaceChild(newPromptInput, elements.promptInput);
-            elements.promptInput = newPromptInput;
+        // ボタンと入力欄のイベントリスナーが重複しないように複製して置き換え
+        const newOkBtn = elements.promptOkBtn.cloneNode(true);
+        elements.promptOkBtn.parentNode.replaceChild(newOkBtn, elements.promptOkBtn);
+        elements.promptOkBtn = newOkBtn;
+        const newCancelBtn = elements.promptCancelBtn.cloneNode(true);
+        elements.promptCancelBtn.parentNode.replaceChild(newCancelBtn, elements.promptCancelBtn);
+        elements.promptCancelBtn = newCancelBtn;
+        const newPromptInput = elements.promptInput.cloneNode(true);
+        elements.promptInput.parentNode.replaceChild(newPromptInput, elements.promptInput);
+        elements.promptInput = newPromptInput;
 
         // EnterキーでOKボタンをクリックする処理
         const enterHandler = (event) => {
@@ -1772,7 +1774,7 @@ const uiUtils = {
             elements.promptInput.removeEventListener('keypress', enterHandler);
             elements.promptDialog.removeEventListener('close', closeHandler);
         };
-            elements.promptDialog.addEventListener('close', closeHandler);
+        elements.promptDialog.addEventListener('close', closeHandler);
 
         const result = await this.showCustomDialog(elements.promptDialog, elements.promptInput);
         return result; // 入力値またはnullを返す
@@ -1783,7 +1785,7 @@ const uiUtils = {
         const blob = new Blob([data], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        
+
         a.href = url;
         a.download = filename;
         document.body.appendChild(a);
@@ -1878,7 +1880,7 @@ const apiUtils = {
             const debugResponse = state.settings.debugVirtualResponse || " "; // 設定されたテキストまたは空文字列
             console.log("デバッグ用仮想送信モード: 実際のAPI呼び出しをスキップし、設定された応答を返します");
             console.log("返答内容:", debugResponse);
-            
+
             // 設定された応答をシミュレートするためのResponseオブジェクトを作成
             const virtualResponse = new Response(
                 JSON.stringify({
@@ -1900,10 +1902,10 @@ const apiUtils = {
                     headers: { "Content-Type": "application/json" }
                 }
             );
-            
+
             return virtualResponse;
         }
-        
+
         if (!state.settings.apiKey) {
             throw new Error("APIキーが設定されていません。");
         }
@@ -1923,11 +1925,11 @@ const apiUtils = {
         console.log(`使用モード: ${useStreaming ? (usePseudo ? '疑似ストリーミング' : 'リアルタイムストリーミング') : '非ストリーミング'}`);
 
         const endpoint = `${GEMINI_API_BASE_URL}${model}:${endpointMethod}key=${apiKey}`;
-        
+
         const finalGenerationConfig = { ...generationConfig }; // コピーを作成
         if (state.settings.presencePenalty !== null) finalGenerationConfig.presencePenalty = state.settings.presencePenalty;
         if (state.settings.frequencyPenalty !== null) finalGenerationConfig.frequencyPenalty = state.settings.frequencyPenalty;
-        
+
         // thinkingConfig 設定を更新
         if (state.settings.thinkingBudget !== null || state.settings.includeThoughts) {
             finalGenerationConfig.thinkingConfig = finalGenerationConfig.thinkingConfig || {};
@@ -1952,14 +1954,14 @@ const apiUtils = {
             // systemInstructionが存在する場合のみ追加 (systemInstructionはオブジェクト形式)
             ...(systemInstruction && systemInstruction.parts && systemInstruction.parts.length > 0 && systemInstruction.parts[0].text && { systemInstruction }),
             // 安全性設定 (全てブロック解除)
-                safetySettings : [
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-                ]
+            safetySettings: [
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+            ]
         };
-        
+
         const tools = []; // tools 配列を初期化
 
         // グラウンディング設定を追加
@@ -1967,7 +1969,7 @@ const apiUtils = {
             tools.push({ "google_search": {} });
             console.log("グラウンディング (Google Search) を有効にしてAPIを呼び出します。");
         }
-        
+
         // tools 配列が空ならリクエストボディから削除
         if (tools.length > 0) {
             requestBody.tools = tools;
@@ -2020,185 +2022,185 @@ const apiUtils = {
 
     // ストリーミングレスポンスを処理
     async *handleStreamingResponse(response) { // async * に変更
-            if (!response.body) {
-                throw new Error("レスポンスボディがありません。");
-            }
-            const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-            let buffer = '';
-            let lastCandidateInfo = null;
-            // processedContentChunks や processedThoughtChunks はここでは不要になる
-            let isCancelled = false;
-            let groundingMetadata = null;
-            let finalUsageMetadata = null; // 最終的なusageMetadataを保持
+        if (!response.body) {
+            throw new Error("レスポンスボディがありません。");
+        }
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = '';
+        let lastCandidateInfo = null;
+        // processedContentChunks や processedThoughtChunks はここでは不要になる
+        let isCancelled = false;
+        let groundingMetadata = null;
+        let finalUsageMetadata = null; // 最終的なusageMetadataを保持
 
-            try {
+        try {
+            while (true) {
+                // キャンセルシグナルをチェック
+                if (state.abortController?.signal.aborted && !isCancelled) {
+                    isCancelled = true;
+                    console.log("ストリーミング中に中断シグナルを検出");
+                    await reader.cancel("User aborted"); // リーダーをキャンセル
+                    throw new Error("リクエストがキャンセルされました。");
+                }
+
+                let readResult;
+                try {
+                    // データを読み取る
+                    readResult = await reader.read();
+                } catch (readError) {
+                    // 読み取り中にエラーが発生した場合 (キャンセル含む)
+                    if (readError.name === 'AbortError' || readError.message === "User aborted" || readError.message.includes("aborted")) {
+                        if (!isCancelled) { // まだキャンセルされていなければエラーとして投げる
+                            isCancelled = true;
+                            throw new Error("リクエストがキャンセルされました。");
+                        }
+                        break; // キャンセル済みならループを抜ける
+                    }
+                    throw readError; // その他の読み取りエラー
+                }
+
+                const { value, done } = readResult;
+
+                if (done) { // ストリーム終了
+                    console.log("ストリーム終了 (done)");
+                    // バッファに残っているデータを処理
+                    if (buffer.trim()) {
+                        // バッファに残っているデータを処理し、yield する
+                        const finalData = parseSseDataForYield(buffer.trim().substring(6));
+                        if (finalData) yield finalData;
+                    }
+                    break; // ループを抜ける
+                }
+
+                // 受信したデータをバッファに追加
+                buffer += value;
+                // バッファを処理してSSEメッセージを抽出し、逐次 yield する
+                let remainingBuffer = buffer;
                 while (true) {
-                    // キャンセルシグナルをチェック
-                    if (state.abortController?.signal.aborted && !isCancelled) {
-                        isCancelled = true;
-                        console.log("ストリーミング中に中断シグナルを検出");
-                        await reader.cancel("User aborted"); // リーダーをキャンセル
-                        throw new Error("リクエストがキャンセルされました。");
+                    const newlineIndex = remainingBuffer.indexOf('\n');
+                    if (newlineIndex === -1) {
+                        buffer = remainingBuffer; // 未処理分をバッファに戻す
+                        break;
                     }
+                    const line = remainingBuffer.substring(0, newlineIndex).trim();
+                    remainingBuffer = remainingBuffer.substring(newlineIndex + 1);
 
-                    let readResult;
-                    try {
-                        // データを読み取る
-                        readResult = await reader.read();
-                    } catch (readError) {
-                        // 読み取り中にエラーが発生した場合 (キャンセル含む)
-                        if (readError.name === 'AbortError' || readError.message === "User aborted" || readError.message.includes("aborted")) {
-                            if (!isCancelled) { // まだキャンセルされていなければエラーとして投げる
-                                isCancelled = true;
-                                throw new Error("リクエストがキャンセルされました。");
-                            }
-                            break; // キャンセル済みならループを抜ける
+                    if (line.startsWith('data: ')) {
+                        const chunkData = parseSseDataForYield(line.substring(6)); // 'data: ' を除いたJSON部分をパース
+                        if (chunkData) {
+                            // groundingMetadata と usageMetadata を更新
+                            if (chunkData.groundingMetadata) groundingMetadata = chunkData.groundingMetadata;
+                            if (chunkData.usageMetadata) finalUsageMetadata = chunkData.usageMetadata; // 常に最新で上書き
+                            yield chunkData; // パースしたデータを yield
                         }
-                        throw readError; // その他の読み取りエラー
+                    } else if (line !== '') {
+                        console.warn("データ以外のSSE行を無視:", line);
                     }
-
-                    const { value, done } = readResult;
-
-                    if (done) { // ストリーム終了
-                        console.log("ストリーム終了 (done)");
-                        // バッファに残っているデータを処理
-                        if (buffer.trim()) {
-                            // バッファに残っているデータを処理し、yield する
-                            const finalData = parseSseDataForYield(buffer.trim().substring(6));
-                            if (finalData) yield finalData;
-                        }
-                        break; // ループを抜ける
-                    }
-
-                    // 受信したデータをバッファに追加
-                    buffer += value;
-                    // バッファを処理してSSEメッセージを抽出し、逐次 yield する
-                    let remainingBuffer = buffer;
-                    while (true) {
-                        const newlineIndex = remainingBuffer.indexOf('\n');
-                        if (newlineIndex === -1) {
-                            buffer = remainingBuffer; // 未処理分をバッファに戻す
-                            break;
-                        }
-                        const line = remainingBuffer.substring(0, newlineIndex).trim();
-                        remainingBuffer = remainingBuffer.substring(newlineIndex + 1);
-
-                        if (line.startsWith('data: ')) {
-                            const chunkData = parseSseDataForYield(line.substring(6)); // 'data: ' を除いたJSON部分をパース
-                            if (chunkData) {
-                                // groundingMetadata と usageMetadata を更新
-                                if (chunkData.groundingMetadata) groundingMetadata = chunkData.groundingMetadata;
-                                if (chunkData.usageMetadata) finalUsageMetadata = chunkData.usageMetadata; // 常に最新で上書き
-                                yield chunkData; // パースしたデータを yield
-                            }
-                        } else if (line !== '') {
-                            console.warn("データ以外のSSE行を無視:", line);
-                        }
-                        // ループの最後にバッファを更新
-                        if (remainingBuffer === '') {
+                    // ループの最後にバッファを更新
+                    if (remainingBuffer === '') {
                         buffer = '';
                         break;
-                        }
                     }
-                }
-                // 最終的なメタデータを取得
-                const finishReason = lastCandidateInfo?.finishReason;
-                const safetyRatings = lastCandidateInfo?.safetyRatings;
-
-                // ストリームの最後にメタデータを yield する (識別子付きで)
-                yield {
-                    type: 'metadata', // メタデータであることを示す
-                    finishReason: isCancelled ? 'ABORTED' : finishReason,
-                    safetyRatings,
-                    groundingMetadata: groundingMetadata, // 最終的なgroundingMetadata
-                    usageMetadata: finalUsageMetadata // 最終的なusageMetadata
-                };
-
-            } catch (error) {
-                // ストリーム処理中のエラー
-                console.error("ストリームの読み取り/処理エラー:", error);
-                throw new Error(`ストリーミング処理エラー: ${error.message || error}`, { cause: { originalError: error } });
-            } finally {
-                // ループ終了後、リーダーがまだ閉じておらず、キャンセルもされていない場合、クリーンアップのためにキャンセルを試みる
-                if (!reader.closed && !isCancelled) {
-                    console.warn("リーダーがループ後に閉じていません。クリーンアップキャンセルを試みます。");
-                    try { await reader.cancel("Cleanup cancellation"); } catch(e) { console.error("クリーンアップキャンセル中のエラー:", e); }
                 }
             }
+            // 最終的なメタデータを取得
+            const finishReason = lastCandidateInfo?.finishReason;
+            const safetyRatings = lastCandidateInfo?.safetyRatings;
 
-            // SSEデータ (JSON) をパースする内部関数 (yield するデータを返すように変更)
-            function parseSseDataForYield(jsonString) {
-                try {
-                    const chunkJson = JSON.parse(jsonString);
-                    if (chunkJson.error) {
-                        console.error("ストリーム内のエラーメッセージ:", chunkJson.error);
-                        const errorMsg = `モデルエラー: ${chunkJson.error.message || JSON.stringify(chunkJson.error)}`;
-                        lastCandidateInfo = { error: chunkJson.error, finishReason: 'ERROR' };
-                        // エラーも yield する (type: 'error' などで)
-                        return { type: 'error', error: chunkJson.error, message: errorMsg };
-                    }
+            // ストリームの最後にメタデータを yield する (識別子付きで)
+            yield {
+                type: 'metadata', // メタデータであることを示す
+                finishReason: isCancelled ? 'ABORTED' : finishReason,
+                safetyRatings,
+                groundingMetadata: groundingMetadata, // 最終的なgroundingMetadata
+                usageMetadata: finalUsageMetadata // 最終的なusageMetadata
+            };
 
-                    let contentText = null;
-                    let thoughtText = null;
-                    let currentGroundingMetadata = null;
-                    let currentUsageMetadata = null; // このチャンクのusageMetadata
+        } catch (error) {
+            // ストリーム処理中のエラー
+            console.error("ストリームの読み取り/処理エラー:", error);
+            throw new Error(`ストリーミング処理エラー: ${error.message || error}`, { cause: { originalError: error } });
+        } finally {
+            // ループ終了後、リーダーがまだ閉じておらず、キャンセルもされていない場合、クリーンアップのためにキャンセルを試みる
+            if (!reader.closed && !isCancelled) {
+                console.warn("リーダーがループ後に閉じていません。クリーンアップキャンセルを試みます。");
+                try { await reader.cancel("Cleanup cancellation"); } catch (e) { console.error("クリーンアップキャンセル中のエラー:", e); }
+            }
+        }
 
-                    if (chunkJson.candidates && chunkJson.candidates.length > 0) {
-                        lastCandidateInfo = chunkJson.candidates[0];
-                        if (lastCandidateInfo?.content?.parts) {
-                            lastCandidateInfo.content.parts.forEach(part => {
-                                if (typeof part.text === 'string') {
-                                    if (part.thought === true) {
-                                        thoughtText = (thoughtText || '') + part.text;
-                                    } else {
-                                        contentText = (contentText || '') + part.text;
-                                    }
+        // SSEデータ (JSON) をパースする内部関数 (yield するデータを返すように変更)
+        function parseSseDataForYield(jsonString) {
+            try {
+                const chunkJson = JSON.parse(jsonString);
+                if (chunkJson.error) {
+                    console.error("ストリーム内のエラーメッセージ:", chunkJson.error);
+                    const errorMsg = `モデルエラー: ${chunkJson.error.message || JSON.stringify(chunkJson.error)}`;
+                    lastCandidateInfo = { error: chunkJson.error, finishReason: 'ERROR' };
+                    // エラーも yield する (type: 'error' などで)
+                    return { type: 'error', error: chunkJson.error, message: errorMsg };
+                }
+
+                let contentText = null;
+                let thoughtText = null;
+                let currentGroundingMetadata = null;
+                let currentUsageMetadata = null; // このチャンクのusageMetadata
+
+                if (chunkJson.candidates && chunkJson.candidates.length > 0) {
+                    lastCandidateInfo = chunkJson.candidates[0];
+                    if (lastCandidateInfo?.content?.parts) {
+                        lastCandidateInfo.content.parts.forEach(part => {
+                            if (typeof part.text === 'string') {
+                                if (part.thought === true) {
+                                    thoughtText = (thoughtText || '') + part.text;
+                                } else {
+                                    contentText = (contentText || '') + part.text;
                                 }
-                            });
-                        }
-                        if (lastCandidateInfo.groundingMetadata) {
-                            currentGroundingMetadata = lastCandidateInfo.groundingMetadata;
-                        }
-                    } else if (chunkJson.promptFeedback) {
-                        console.warn("ストリーム内のプロンプトフィードバック:", chunkJson.promptFeedback);
-                        lastCandidateInfo = { finishReason: 'SAFETY', safetyRatings: chunkJson.promptFeedback.safetyRatings };
-                        // promptFeedbackも yield するか検討 (ここでは省略)
-                        return null; // または適切なデータを返す
-                    }
-
-                    if (chunkJson.usageMetadata) { // usageMetadataをチェック
-                        currentUsageMetadata = chunkJson.usageMetadata;
-                    }
-
-                    // レスポンス置換を適用
-                    if (contentText !== null && state.responseReplacer && state.responseReplacer.replacements.length > 0) {
-                        let replacedContent = contentText;
-                        for (const replacement of state.responseReplacer.replacements) {
-                            try {
-                                const regex = new RegExp(replacement.pattern, 'g');
-                                replacedContent = replacedContent.replace(regex, replacement.replacement);
-                            } catch (error) {
-                                console.warn('レスポンス置換でエラー:', error, 'パターン:', replacement.pattern);
                             }
-                        }
-                        contentText = replacedContent;
+                        });
                     }
-
-                    if (contentText !== null || thoughtText !== null || currentGroundingMetadata || currentUsageMetadata) {
-                        return {
-                            type: 'chunk', // 通常のチャンクであることを示す
-                            contentText,
-                            thoughtText,
-                            groundingMetadata: currentGroundingMetadata, // このチャンクのgroundingMetadata
-                            usageMetadata: currentUsageMetadata // このチャンクのusageMetadata
-                        };
+                    if (lastCandidateInfo.groundingMetadata) {
+                        currentGroundingMetadata = lastCandidateInfo.groundingMetadata;
                     }
-                    return null; // 有効なデータがなければnull
-                } catch (parseError) {
-                    console.warn("ストリーム内の不正なJSONをスキップ:", jsonString, parseError);
-                    return null;
+                } else if (chunkJson.promptFeedback) {
+                    console.warn("ストリーム内のプロンプトフィードバック:", chunkJson.promptFeedback);
+                    lastCandidateInfo = { finishReason: 'SAFETY', safetyRatings: chunkJson.promptFeedback.safetyRatings };
+                    // promptFeedbackも yield するか検討 (ここでは省略)
+                    return null; // または適切なデータを返す
                 }
+
+                if (chunkJson.usageMetadata) { // usageMetadataをチェック
+                    currentUsageMetadata = chunkJson.usageMetadata;
+                }
+
+                // レスポンス置換を適用
+                if (contentText !== null && state.responseReplacer && state.responseReplacer.replacements.length > 0) {
+                    let replacedContent = contentText;
+                    for (const replacement of state.responseReplacer.replacements) {
+                        try {
+                            const regex = new RegExp(replacement.pattern, 'g');
+                            replacedContent = replacedContent.replace(regex, replacement.replacement);
+                        } catch (error) {
+                            console.warn('レスポンス置換でエラー:', error, 'パターン:', replacement.pattern);
+                        }
+                    }
+                    contentText = replacedContent;
+                }
+
+                if (contentText !== null || thoughtText !== null || currentGroundingMetadata || currentUsageMetadata) {
+                    return {
+                        type: 'chunk', // 通常のチャンクであることを示す
+                        contentText,
+                        thoughtText,
+                        groundingMetadata: currentGroundingMetadata, // このチャンクのgroundingMetadata
+                        usageMetadata: currentUsageMetadata // このチャンクのusageMetadata
+                    };
+                }
+                return null; // 有効なデータがなければnull
+            } catch (parseError) {
+                console.warn("ストリーム内の不正なJSONをスキップ:", jsonString, parseError);
+                return null;
             }
+        }
     }
 };
 
@@ -2248,12 +2250,12 @@ const appLogic = {
             if (state.settings.backgroundImageBlob instanceof Blob) {
                 uiUtils.revokeExistingObjectUrl(); // 既存URLがあれば破棄
                 try {
-                        state.backgroundImageUrl = URL.createObjectURL(state.settings.backgroundImageBlob);
-                        document.documentElement.style.setProperty('--chat-background-image', `url(${state.backgroundImageUrl})`);
-                        console.log("読み込んだBlobから背景画像を適用しました。");
+                    state.backgroundImageUrl = URL.createObjectURL(state.settings.backgroundImageBlob);
+                    document.documentElement.style.setProperty('--chat-background-image', `url(${state.backgroundImageUrl})`);
+                    console.log("読み込んだBlobから背景画像を適用しました。");
                 } catch (e) {
-                        console.error("背景画像のオブジェクトURL作成エラー:", e);
-                        document.documentElement.style.setProperty('--chat-background-image', 'none');
+                    console.error("背景画像のオブジェクトURL作成エラー:", e);
+                    document.documentElement.style.setProperty('--chat-background-image', 'none');
                 }
             } else {
                 // 背景画像がない場合はスタイルをリセット
@@ -2276,7 +2278,7 @@ const appLogic = {
                 // エラーが発生した場合は新規チャットを開始
                 this.startNewChat();
             }
-            
+
             // 圧縮ボタンのテキストを更新
             if (typeof updateCompressButtonText === 'function') {
                 updateCompressButtonText();
@@ -2312,28 +2314,28 @@ const appLogic = {
         elements.gotoHistoryBtn.addEventListener('click', () => uiUtils.showScreen('history'));
         elements.gotoSettingsBtn.addEventListener('click', () => uiUtils.showScreen('settings'));
         elements.promptCheckBtn.addEventListener('click', async () => {
-			// プロンプト確認画面に表示するデータを構築
-			const promptData = buildPromptDataForCheck();
-			        elements.promptContent.textContent = promptData;
-        // 圧縮状態を表示
-        this.updateCompressionStatusDisplay();
-        // レスポンス置換を読み込み（現在のチャットデータがない場合は空で初期化）
-        await this.loadResponseReplacementsFromChat();
-        // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
-        state.responseReplacerUI.renderList();
+            // プロンプト確認画面に表示するデータを構築
+            const promptData = buildPromptDataForCheck();
+            elements.promptContent.textContent = promptData;
+            // 圧縮状態を表示
+            this.updateCompressionStatusDisplay();
+            // レスポンス置換を読み込み（現在のチャットデータがない場合は空で初期化）
+            await this.loadResponseReplacementsFromChat();
+            // レスポンス置換リストを事前に表示（タブ切り替え時に即座に表示されるように）
+            state.responseReplacerUI.renderList();
             // ContextNoteを読み込み（現在のチャットデータがない場合は空で初期化）
-		await this.loadContextNotesFromChat();
-		
-		// 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
-		if (state.contextNote.getAllNotes().length === 0) {
-			this.addDefaultContextNoteSpec();
-		}
-		
-		// ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
-		state.contextNoteUI.renderList();
-			uiUtils.showScreen('chat-info');
-		});
-        
+            await this.loadContextNotesFromChat();
+
+            // 新規チャットの場合、デフォルトのコンテキストノート仕様を追加
+            if (state.contextNote.getAllNotes().length === 0) {
+                this.addDefaultContextNoteSpec();
+            }
+
+            // ContextNoteリストを事前に表示（タブ切り替え時に即座に表示されるように）
+            state.contextNoteUI.renderList();
+            uiUtils.showScreen('chat-info');
+        });
+
         // 圧縮破棄ボタン
         elements.clearCompressionBtn.addEventListener('click', async () => {
             if (state.compressedSummary) {
@@ -2352,7 +2354,7 @@ const appLogic = {
                 }
             }
         });
-        
+
         // 戻るボタンは history.back() を使用
         elements.backToChatFromHistoryBtn.addEventListener('click', () => history.back());
         elements.backToChatFromPromptCheckBtn.addEventListener('click', () => history.back());
@@ -2407,7 +2409,7 @@ const appLogic = {
         });
         elements.updateAppBtn.addEventListener('click', () => this.updateApp());
         elements.clearDataBtn.addEventListener('click', () => this.confirmClearAllData());
-        
+
         // データバックアップ・復元アクション
         elements.backupDataBtn.addEventListener('click', () => this.backupAllData());
         elements.restoreDataBtn.addEventListener('click', () => this.restoreAllData());
@@ -2424,7 +2426,7 @@ const appLogic = {
             // 注意: 変更は「設定を保存」ボタンクリック時にDBに保存される
         });
 
-		// 背景画像ボタンリスナー
+        // 背景画像ボタンリスナー
         elements.uploadBackgroundBtn.addEventListener('click', () => elements.backgroundImageInput.click()); // ファイル選択ダイアログを開く
         elements.backgroundImageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
@@ -2444,7 +2446,7 @@ const appLogic = {
         elements.compressionPromptTextarea.addEventListener('input', async () => {
             // 圧縮プロンプトが変更されたらトークン数をリセット
             state.settings.compressionPromptTokenCount = null;
-            
+
             // IndexedDBにも保存
             try {
                 await dbUtils.saveSetting('compressionPromptTokenCount', null);
@@ -2453,7 +2455,7 @@ const appLogic = {
                 console.error('圧縮プロンプトのトークン数リセットに失敗:', error);
             }
         });
-        
+
         // --- メッセージクリックで操作ボックス表示/非表示 ---
         elements.messageContainer.addEventListener('click', (event) => {
             const clickedMessage = event.target.closest('.message');
@@ -2498,7 +2500,7 @@ const appLogic = {
                 }
             }
             // メッセージコンテナ内のクリックは上記のリスナーで処理される
-        }, true); 
+        }, true);
 
         // スワイプイベントリスナー (チャット画面のみ)
         // passive: false にして preventDefault を呼べるようにする (必要に応じて)
@@ -2526,11 +2528,11 @@ const appLogic = {
                 this.switchTab(tabName);
             });
         });
-        
+
         // ファイルアップロード関連のイベントリスナー
         elements.attachFileBtn.addEventListener('click', () => uiUtils.showFileUploadDialog());
         elements.selectFilesBtn.addEventListener('click', () => elements.fileInput.click());
-            // fileInput の change イベントリスナー
+        // fileInput の change イベントリスナー
         elements.fileInput.addEventListener('change', (event) => {
             this.handleFileSelection(event.target.files);
             // 処理が終わったら input の値をリセットする
@@ -2555,7 +2557,7 @@ const appLogic = {
             }
         });
 
-		
+
         // *UIのイベントリスナーを設定
         state.responseReplacerUI.setupEventListeners();
         state.contextNoteUI.setupEventListeners();
@@ -2587,7 +2589,7 @@ const appLogic = {
     // --- スワイプ処理 (ズーム対応) ---
     handleTouchStart(event) {
         if (!state.settings.enableSwipeNavigation) return;
-        
+
         // マルチタッチ(ピンチ操作など)やズーム中はスワイプ開始点を記録しない
         if (event.touches.length > 1 || state.isZoomed) {
             state.touchStartX = 0; // 開始点をリセットしてスワイプ判定を無効化
@@ -2604,7 +2606,7 @@ const appLogic = {
 
     handleTouchMove(event) {
         if (!state.settings.enableSwipeNavigation) return;
-        
+
         // 開始点がない、マルチタッチ、ズーム中は処理しない
         if (!state.touchStartX || event.touches.length > 1 || state.isZoomed) {
             return;
@@ -2632,24 +2634,24 @@ const appLogic = {
     },
 
     handleTouchEnd(event) {
-            if (!state.settings.enableSwipeNavigation) {
-                this.resetSwipeState(); // 状態はリセットしておく
-                return;
-            }
+        if (!state.settings.enableSwipeNavigation) {
+            this.resetSwipeState(); // 状態はリセットしておく
+            return;
+        }
 
-            // ズーム状態を最終確認 (touchendまでに変わる可能性もあるため)
-            this.updateZoomState();
-            if (state.isZoomed) {
-                console.log("Zoomed state detected on touchend, skipping swipe navigation.");
-                this.resetSwipeState();
-                return;
-            }
+        // ズーム状態を最終確認 (touchendまでに変わる可能性もあるため)
+        this.updateZoomState();
+        if (state.isZoomed) {
+            console.log("Zoomed state detected on touchend, skipping swipe navigation.");
+            this.resetSwipeState();
+            return;
+        }
 
-            // スワイプ中でない、または開始点がない場合はリセットして終了
-            if (!state.isSwiping || !state.touchStartX) {
-                this.resetSwipeState();
-                return;
-            }
+        // スワイプ中でない、または開始点がない場合はリセットして終了
+        if (!state.isSwiping || !state.touchStartX) {
+            this.resetSwipeState();
+            return;
+        }
 
         const diffX = state.touchStartX - state.touchEndX;
         const diffY = state.touchStartY - state.touchEndY; // 縦移動量も一応計算
@@ -2702,7 +2704,7 @@ const appLogic = {
             if (!confirmed) return;
             this.cancelEditSystemPrompt();
         }
-        
+
         // 保留中の添付ファイルがあれば破棄確認
         if (state.pendingAttachments.length > 0) {
             const confirmedAttach = await uiUtils.showCustomConfirm("添付準備中のファイルがあります。破棄して新規チャットを開始しますか？");
@@ -2710,7 +2712,7 @@ const appLogic = {
             state.pendingAttachments = []; // 破棄
             uiUtils.updateAttachmentBadgeVisibility(); // バッジ状態更新
         }
-        
+
         // 現在のチャットにメッセージまたはシステムプロンプトがあり、IDもあれば保存を試みる
         if ((state.currentMessages.length > 0 || state.currentSystemPrompt) && state.currentChatId) {
             try {
@@ -2725,11 +2727,11 @@ const appLogic = {
         // コンテキストノートとレスポンス置き換えの設定を引き継ぐか確認
         const hasContextNotes = state.contextNote && state.contextNote.getAllNotes().length > 1; // デフォルト仕様以外
         const hasResponseReplacements = state.responseReplacer && state.responseReplacer.getReplacements().length > 0;
-        
+
         if (hasContextNotes || hasResponseReplacements) {
             const confirmed = await uiUtils.showCustomYesNo("このチャットのコンテキストノートとレスポンス置き換えの設定を引き継ぎますか？");
 
-			if (confirmed) {
+            if (confirmed) {
                 await this.startNewChatWithSettings();
             } else {
                 this.startNewChat();
@@ -2749,26 +2751,26 @@ const appLogic = {
         state.compressedSummary = null; // 圧縮データをリセット
         state.pendingAttachments = []; // 保留中の添付ファイルをクリア
         state.lastSentRequest = null; // 最後に送信したリクエスト内容をクリア
-        
+
         state.responseReplacer = new ResponseReplacer();
-		if (state.responseReplacerUI) {
-			state.responseReplacerUI.sync(state.responseReplacer);
-		} else {
-			state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
-			this.responseReplacerUIInit();
-		}
+        if (state.responseReplacerUI) {
+            state.responseReplacerUI.sync(state.responseReplacer);
+        } else {
+            state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
+            this.responseReplacerUIInit();
+        }
 
         state.contextNote = new ContextNote();
 
-		if (state.contextNoteUI) {
-			state.contextNoteUI.sync(state.contextNote);
-		} else {
-			state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
-			this.contextNoteUIInit();
-		}
-        
+        if (state.contextNoteUI) {
+            state.contextNoteUI.sync(state.contextNote);
+        } else {
+            state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
+            this.contextNoteUIInit();
+        }
+
         this.addDefaultContextNoteSpec();
-        
+
         uiUtils.updateSystemPromptUI(); // システムプロンプトUI更新
         uiUtils.renderChatMessages(); // 表示クリア
         uiUtils.updateChatTitle(); // タイトルを「新規チャット」に
@@ -2787,25 +2789,25 @@ const appLogic = {
         console.log('startNewChatWithSettings: 開始, 現在のID:', state.currentChatId);
 
         // 現在の設定を深い複製でバックアップ
-        const currentContextNotes = state.contextNote ? 
+        const currentContextNotes = state.contextNote ?
             JSON.parse(JSON.stringify(state.contextNote.getAllNotes())) : [];
-        const currentResponseReplacements = state.responseReplacer ? 
+        const currentResponseReplacements = state.responseReplacer ?
             JSON.parse(JSON.stringify(state.responseReplacer.getReplacements())) : [];
-        
+
         this.startNewChat();
-        
+
         // コンテキストノートを引き継ぎ
         if (currentContextNotes.length > 1) {
             state.contextNote.clearNotes();
-            
+
             currentContextNotes.forEach(note => {
                 state.contextNote.addNote(note.type, note.title, note.content, note.keywords, note.category);
             });
         }
-        
+
         // レスポンス置き換えを引き継ぎ
         if (currentResponseReplacements.length > 0) {
-			currentResponseReplacements.forEach(replacement => {
+            currentResponseReplacements.forEach(replacement => {
                 state.responseReplacer.addReplacement(replacement.pattern, replacement.replacement);
             });
         }
@@ -2875,7 +2877,7 @@ const appLogic = {
                 // 最後に送信したリクエスト内容を読み込み
                 state.lastSentRequest = chat.lastSentRequest || null;
                 state.pendingAttachments = []; // 保留中の添付ファイルをクリア
-                
+
                 // レスポンス置換データを読み込み
                 this.loadResponseReplacementsFromChat(chat);
                 // ContextNoteデータを読み込み
@@ -2978,7 +2980,7 @@ const appLogic = {
                     title: newTitle,
                     // 圧縮データもコピー
                     ...(chat.compressedSummary && { compressedSummary: chat.compressedSummary }),
-                                                // ContextNoteデータもコピー
+                    // ContextNoteデータもコピー
                     ...(chat.contextNotes && { contextNotes: [...chat.contextNotes] })
                 };
                 // 新しいチャットとしてDBに追加
@@ -3007,8 +3009,8 @@ const appLogic = {
 
     // チャット削除の確認と実行 (メッセージペア全体)
     async confirmDeleteChat(id, title) {
-            const confirmed = await uiUtils.showCustomConfirm(`「${title || 'この履歴'}」を削除しますか？`);
-            if (confirmed) {
+        const confirmed = await uiUtils.showCustomConfirm(`「${title || 'この履歴'}」を削除しますか？`);
+        if (confirmed) {
             const isDeletingCurrent = state.currentChatId === id;
             const currentScreenBeforeDelete = state.currentScreen;
 
@@ -3066,7 +3068,7 @@ const appLogic = {
                 titleElement.title = finalTitle; // ホバータイトルも更新
                 // 更新日時も更新表示
                 const dateElement = titleElement.closest('.history-item')?.querySelector('.updated-date');
-                if(dateElement) dateElement.textContent = `更新: ${uiUtils.formatDate(Date.now())}`;
+                if (dateElement) dateElement.textContent = `更新: ${uiUtils.formatDate(Date.now())}`;
                 // 現在表示中のチャットのタイトルが変更されたら、ヘッダーも更新
                 if (state.currentChatId === chatId) {
                     uiUtils.updateChatTitle(finalTitle);
@@ -3103,7 +3105,7 @@ const appLogic = {
         }
 
         if (state.isSending || (!text && attachmentsToSend.length === 0)) {
-            if(!text && attachmentsToSend.length === 0) console.log("入力も添付ファイルもありません。");
+            if (!text && attachmentsToSend.length === 0) console.log("入力も添付ファイルもありません。");
             return;
         }
         if (!state.settings.apiKey) { await uiUtils.showCustomAlert("APIキーが設定されていません。設定画面を開きます。"); uiUtils.showScreen('settings'); return; }
@@ -3149,20 +3151,20 @@ const appLogic = {
                 siblingStartIndex++;
             }
             if (siblingStartIndex < state.currentMessages.length && state.currentMessages[siblingStartIndex].role === 'model') {
-                    firstResponseIndexForRetry = siblingStartIndex;
-                    const firstResponse = state.currentMessages[firstResponseIndexForRetry];
-                    if (firstResponse.isCascaded && firstResponse.siblingGroupId) {
-                        existingSiblingGroupId = firstResponse.siblingGroupId;
-                        state.currentMessages.forEach(msg => {
-                            if (msg.siblingGroupId === existingSiblingGroupId) {
-                                msg.isSelected = false;
-                            }
-                        });
-                        console.log(`リトライ: 既存の応答グループ (${existingSiblingGroupId}) の isSelected を false に設定.`);
-                        siblingGroupIdToUse = existingSiblingGroupId;
-                    } else {
-                        console.log("リトライ: 最初の応答を新しいカスケードグループに含めます。");
-                    }
+                firstResponseIndexForRetry = siblingStartIndex;
+                const firstResponse = state.currentMessages[firstResponseIndexForRetry];
+                if (firstResponse.isCascaded && firstResponse.siblingGroupId) {
+                    existingSiblingGroupId = firstResponse.siblingGroupId;
+                    state.currentMessages.forEach(msg => {
+                        if (msg.siblingGroupId === existingSiblingGroupId) {
+                            msg.isSelected = false;
+                        }
+                    });
+                    console.log(`リトライ: 既存の応答グループ (${existingSiblingGroupId}) の isSelected を false に設定.`);
+                    siblingGroupIdToUse = existingSiblingGroupId;
+                } else {
+                    console.log("リトライ: 最初の応答を新しいカスケードグループに含めます。");
+                }
             } else {
                 console.warn("リトライ対象のユーザーメッセージの後にモデル応答が見つかりません。");
             }
@@ -3171,13 +3173,13 @@ const appLogic = {
         // --- 3. 送信前チャット保存 ---
         try {
             let titleToSave = null;
-            if(state.currentChatId) {
+            if (state.currentChatId) {
                 const currentChat = await dbUtils.getChat(state.currentChatId);
-                if(currentChat) titleToSave = currentChat.title;
+                if (currentChat) titleToSave = currentChat.title;
             }
             if (!titleToSave) {
                 const firstUserMsg = state.currentMessages.find(m => m.role === 'user');
-                if(firstUserMsg) {
+                if (firstUserMsg) {
                     titleToSave = firstUserMsg.content.substring(0, 50);
                 }
             }
@@ -3225,47 +3227,56 @@ const appLogic = {
         }
 
         // ContextNote機能: キーワードマッチングとランダム選択の結果を追加
-        let matchedNotesResult = null;
+        let separatedNotes = null;
         if (state.contextNote) {
             // 設定に基づいてContextNote対象のメッセージを取得
             let targetMessages = state.currentMessages
                 .filter(msg => msg.role === 'user' || msg.role === 'model')
                 .slice(-state.settings.contextNoteMessageCount); // 最新のN件を取得
-            
+
             // 最初のユーザー発言を除外（最初のユーザーメッセージが含まれている場合）
             if (targetMessages.length > 0 && targetMessages[0].role === 'user') {
                 targetMessages = targetMessages.slice(1);
             }
-            
+
             // チャットのやり取りを文字列として取得
             let chatText = targetMessages
                 .map(msg => msg.content)
                 .join('\n');
-            
+
             // 最大文字数で切り詰め（最新の方から）
             if (chatText.length > state.settings.contextNoteMaxChars) {
                 chatText = chatText.slice(-state.settings.contextNoteMaxChars);
             }
-            
-            // マッチしたノートの文字列を取得（新しい設定を使用）
-            matchedNotesResult = state.contextNote.getMatchedNotesString(
-                chatText, 
+
+            // マッチしたノートの文字列を取得（keywordとmomentを分離）
+            separatedNotes = state.contextNote.getMatchedNotesSeparated(
+                chatText,
                 state.settings.contextNoteRandomFrequency,
                 state.settings.contextNoteRandomCount
             );
-            
-            if (matchedNotesResult.text) {
-                // 挿入優先度に基づいて挿入位置を決定
-                const insertionIndex = calculateInsertionIndex(state.settings.contextNoteInsertionPriority, baseMessages);
-                
-                // マッチしたノートの内容を指定位置に挿入
+
+            // 挿入優先度に基づいて挿入位置を決定
+            const insertionIndex = calculateInsertionIndex(state.settings.contextNoteInsertionPriority, baseMessages);
+
+            // keywordノートを挿入
+            if (separatedNotes.keywordText) {
                 baseMessages.splice(insertionIndex, 0, {
                     role: CONTEXT_NOTE_ROLE,
-                    parts: [{ text: `${REFERENCE_TAG_START}\n${matchedNotesResult.text}\n${REFERENCE_TAG_END}` }]
+                    parts: [{ text: `${REFERENCE_KEYWORD_TAG_START}\n${separatedNotes.keywordText}\n${REFERENCE_KEYWORD_TAG_END}` }]
+                });
+            }
+
+            // momentノートを挿入（keywordの後に挿入）
+            if (separatedNotes.momentText) {
+                const momentInsertionIndex = separatedNotes.keywordText ? insertionIndex + 1 : insertionIndex;
+                baseMessages.splice(momentInsertionIndex, 0, {
+                    role: CONTEXT_NOTE_ROLE,
+                    parts: [{ text: `${REFERENCE_MOMENT_TAG_START}\n${separatedNotes.momentText}\n${REFERENCE_MOMENT_TAG_END}` }]
                 });
             }
         }
-        
+
         const dummyUserText = state.settings.enableDummyUser && state.settings.dummyUser?.trim();
         const dummyModelText = state.settings.enableDummyModel && state.settings.dummyModel?.trim();
         if (dummyUserText) baseMessages.push({ role: 'user', parts: [{ text: dummyUserText }] });
@@ -3288,7 +3299,7 @@ const appLogic = {
         console.log('baseMessages:', baseMessages);
 
         const apiMessages = compressionUtils.buildMessagesForApi(baseMessages, state.isCompressionMode);
-        
+
         console.log('最終的なapiMessages:', apiMessages);
         console.log('=== 圧縮機能デバッグ終了 ===');
 
@@ -3296,7 +3307,7 @@ const appLogic = {
         const finalGenerationConfig = { ...generationConfig };
         if (state.settings.presencePenalty !== null) finalGenerationConfig.presencePenalty = state.settings.presencePenalty;
         if (state.settings.frequencyPenalty !== null) finalGenerationConfig.frequencyPenalty = state.settings.frequencyPenalty;
-        
+
         if (state.settings.thinkingBudget !== null || state.settings.includeThoughts) {
             finalGenerationConfig.thinkingConfig = finalGenerationConfig.thinkingConfig || {};
             if (state.settings.thinkingBudget !== null && Number.isInteger(state.settings.thinkingBudget) && state.settings.thinkingBudget >= 0) {
@@ -3329,7 +3340,7 @@ const appLogic = {
         // プロンプト確認用データを構築（実際のrequestBodyを使用）
         const promptData = buildPromptDataForCheck(requestBody);
 
-		// ContextNoteロールをuserに戻す（API送信用）
+        // ContextNoteロールをuserに戻す（API送信用）
         apiMessages.forEach(msg => {
             if (msg.role === CONTEXT_NOTE_ROLE) {
                 msg.role = 'user';
@@ -3340,19 +3351,19 @@ const appLogic = {
         let compressionChars = 0;
         let contextNoteChars = 0;
         let contextNoteMatches = 0;
-        
+
         // 圧縮サマリの文字数を計算
         if (state.compressedSummary) {
             const summaryContent = state.compressedSummary.summary || '';
             compressionChars = summaryContent.length;
         }
-        
+
         // ContextNoteの文字数とマッチ数を取得
-        if (matchedNotesResult && matchedNotesResult.text) {
-            contextNoteChars = matchedNotesResult.charCount;
-            contextNoteMatches = matchedNotesResult.matchCount;
+        if (separatedNotes) {
+            contextNoteChars = (separatedNotes.keywordCharCount || 0) + (separatedNotes.momentCharCount || 0);
+            contextNoteMatches = (separatedNotes.keywordMatchCount || 0) + (separatedNotes.momentMatchCount || 0);
         }
-        
+
         // 送信リクエスト内容を保存（送信時刻と文字数情報も含める）
         state.lastSentRequest = {
             promptData: promptData, // プロンプト確認用データ
@@ -3372,7 +3383,7 @@ const appLogic = {
         try {
             // ローディングインジケータを表示
             uiUtils.setLoadingIndicator(true);
-            
+
             const response = await apiUtils.callGeminiApi(apiMessages, generationConfig, systemInstruction);
             const dummyModelPrefix = (state.settings.concatDummyModel && state.settings.enableDummyModel && state.settings.dummyModel) ? state.settings.dummyModel : '';
             state.partialStreamContent = dummyModelPrefix; // プレフィックスを初期値に設定
@@ -3501,7 +3512,7 @@ const appLogic = {
                     }
                 } else {
                     rawContentFromApi = "応答候補がありません";
-                    if(data.promptFeedback) {
+                    if (data.promptFeedback) {
                         rawContentFromApi += ` (理由: ${data.promptFeedback.blockReason || '不明'})`;
                         modelResponseMetadata.promptFeedback = data.promptFeedback;
                         modelResponseMetadata.finishReason = data.promptFeedback.blockReason || 'ERROR';
@@ -3514,49 +3525,49 @@ const appLogic = {
             }
 
             if (modelResponseRawContent || modelThoughtSummaryContent || modelResponseMetadata.finishReason) {
-                    const newModelMessage = {
-                        role: 'model',
-                        content: modelResponseRawContent,
-                        thoughtSummary: modelThoughtSummaryContent || null,
-                        timestamp: Date.now(),
-                        ...modelResponseMetadata,
-                        groundingMetadata: currentGroundingMetadata,
-                        usageMetadata: finalUsageMetadataFromStream
-                    };
+                const newModelMessage = {
+                    role: 'model',
+                    content: modelResponseRawContent,
+                    thoughtSummary: modelThoughtSummaryContent || null,
+                    timestamp: Date.now(),
+                    ...modelResponseMetadata,
+                    groundingMetadata: currentGroundingMetadata,
+                    usageMetadata: finalUsageMetadataFromStream
+                };
 
-                    const targetUserIndexForCascade = userMessageIndex;
-                    if (targetUserIndexForCascade !== -1) {
-                        if (siblingGroupIdToUse === null) {
-                            siblingGroupIdToUse = `gid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-                            console.log("カスケードフラグ設定: 新規 siblingGroupId を生成:", siblingGroupIdToUse);
-                        }
-                        newModelMessage.isCascaded = true;
-                        newModelMessage.isSelected = true;
-                        newModelMessage.siblingGroupId = siblingGroupIdToUse;
-
-                        if (isRetry && firstResponseIndexForRetry !== -1 && state.currentMessages[firstResponseIndexForRetry] && !state.currentMessages[firstResponseIndexForRetry].isCascaded) {
-                            state.currentMessages[firstResponseIndexForRetry].isCascaded = true;
-                            state.currentMessages[firstResponseIndexForRetry].siblingGroupId = siblingGroupIdToUse;
-                            console.log(`最初の応答 (index ${firstResponseIndexForRetry}) にフラグ設定: isCascaded=true, siblingGroupId=${siblingGroupIdToUse}`);
-                        }
-                        console.log(`応答にフラグ設定: isCascaded=true, isSelected=true, siblingGroupId=${newModelMessage.siblingGroupId}`);
+                const targetUserIndexForCascade = userMessageIndex;
+                if (targetUserIndexForCascade !== -1) {
+                    if (siblingGroupIdToUse === null) {
+                        siblingGroupIdToUse = `gid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+                        console.log("カスケードフラグ設定: 新規 siblingGroupId を生成:", siblingGroupIdToUse);
                     }
+                    newModelMessage.isCascaded = true;
+                    newModelMessage.isSelected = true;
+                    newModelMessage.siblingGroupId = siblingGroupIdToUse;
 
-                    state.currentMessages.push(newModelMessage);
-                    if (state.settings.streamingOutput) {
-                        uiUtils.finalizeStreamingMessage(state.currentMessages.length - 1);
-                    } else {
+                    if (isRetry && firstResponseIndexForRetry !== -1 && state.currentMessages[firstResponseIndexForRetry] && !state.currentMessages[firstResponseIndexForRetry].isCascaded) {
+                        state.currentMessages[firstResponseIndexForRetry].isCascaded = true;
+                        state.currentMessages[firstResponseIndexForRetry].siblingGroupId = siblingGroupIdToUse;
+                        console.log(`最初の応答 (index ${firstResponseIndexForRetry}) にフラグ設定: isCascaded=true, siblingGroupId=${siblingGroupIdToUse}`);
+                    }
+                    console.log(`応答にフラグ設定: isCascaded=true, isSelected=true, siblingGroupId=${newModelMessage.siblingGroupId}`);
+                }
+
+                state.currentMessages.push(newModelMessage);
+                if (state.settings.streamingOutput) {
+                    uiUtils.finalizeStreamingMessage(state.currentMessages.length - 1);
+                } else {
                     uiUtils.renderChatMessages();
-                    }
-                    await dbUtils.saveChat();
-                    console.log("モデル応答保存完了");
+                }
+                await dbUtils.saveChat();
+                console.log("モデル応答保存完了");
             } else {
                 console.log("モデル応答コンテンツがないため保存しません。");
-                    if (state.settings.streamingOutput) {
+                if (state.settings.streamingOutput) {
                     const tempPlaceholderIndex = state.currentMessages.length; // このインデックスは実際には使われないが、ID生成の元になった値
                     const placeholderElement = document.getElementById(`streaming-message-${tempPlaceholderIndex}`);
                     if (placeholderElement) placeholderElement.remove();
-                    }
+                }
             }
         } catch (error) {
             console.error("Gemini呼び出し/処理中のエラー:", error);
@@ -3567,50 +3578,50 @@ const appLogic = {
             const partialContentOnError = state.partialStreamContent;
 
             if ((partialContentOnError || partialThoughtContentOnError) && state.settings.streamingOutput) {
-                    const finalPartialContent = partialContentOnError + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})`;
-                    const finalPartialThought = partialThoughtContentOnError ? partialThoughtContentOnError + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})` : null;
+                const finalPartialContent = partialContentOnError + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})`;
+                const finalPartialThought = partialThoughtContentOnError ? partialThoughtContentOnError + `\n\n(${isAbort ? '中断されました' : 'エラーが発生しました'})` : null;
 
-                    const partialMessage = {
-                        role: 'model',
-                        content: finalPartialContent,
-                        thoughtSummary: finalPartialThought,
-                        timestamp: Date.now(),
-                        error: true,
-                        finishReason: isAbort ? 'ABORTED' : (modelResponseMetadata.finishReason || 'ERROR'),
-                        ...(modelResponseMetadata.safetyRatings && { safetyRatings: modelResponseMetadata.safetyRatings }),
-                        groundingMetadata: currentGroundingMetadata,
-                        usageMetadata: finalUsageMetadataFromStream
-                    };
-                    if (isRetry && isAbort) {
-                        if (siblingGroupIdToUse === null) {
-                            siblingGroupIdToUse = `gid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-                            console.log("リトライ中断エラー: 新規 siblingGroupId を生成:", siblingGroupIdToUse);
-                        } else {
-                            console.log("リトライ中断エラー: 既存の siblingGroupId を使用:", siblingGroupIdToUse);
-                        }
-                        partialMessage.isCascaded = true;
-                        partialMessage.siblingGroupId = siblingGroupIdToUse;
-                        partialMessage.isSelected = true;
-                        console.log(`リトライ中断エラー: 部分メッセージにカスケードフラグ設定 (gid: ${siblingGroupIdToUse})`);
-                        if (firstResponseIndexForRetry !== -1 && state.currentMessages[firstResponseIndexForRetry] && !state.currentMessages[firstResponseIndexForRetry].isCascaded) {
-                            state.currentMessages[firstResponseIndexForRetry].isCascaded = true;
-                            state.currentMessages[firstResponseIndexForRetry].siblingGroupId = siblingGroupIdToUse;
-                            console.log(`リトライ中断エラー: 最初の応答 (index ${firstResponseIndexForRetry}) にもフラグ設定: isCascaded=true, siblingGroupId=${siblingGroupIdToUse}`);
-                        }
+                const partialMessage = {
+                    role: 'model',
+                    content: finalPartialContent,
+                    thoughtSummary: finalPartialThought,
+                    timestamp: Date.now(),
+                    error: true,
+                    finishReason: isAbort ? 'ABORTED' : (modelResponseMetadata.finishReason || 'ERROR'),
+                    ...(modelResponseMetadata.safetyRatings && { safetyRatings: modelResponseMetadata.safetyRatings }),
+                    groundingMetadata: currentGroundingMetadata,
+                    usageMetadata: finalUsageMetadataFromStream
+                };
+                if (isRetry && isAbort) {
+                    if (siblingGroupIdToUse === null) {
+                        siblingGroupIdToUse = `gid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+                        console.log("リトライ中断エラー: 新規 siblingGroupId を生成:", siblingGroupIdToUse);
+                    } else {
+                        console.log("リトライ中断エラー: 既存の siblingGroupId を使用:", siblingGroupIdToUse);
                     }
-                    state.currentMessages.push(partialMessage);
-                    try {
-                        if (state.settings.streamingOutput) {
-                            uiUtils.finalizeStreamingMessage(state.currentMessages.length - 1);
-                        } else {
-                            uiUtils.renderChatMessages();
-                        }
-                        await dbUtils.saveChat();
-                        console.log("部分的なメッセージ状態を保存しました。");
-                    } catch (saveError) {
-                        console.error("部分メッセージの保存失敗:", saveError);
-                        uiUtils.displayError(displayErrorMessage, !isAbort);
+                    partialMessage.isCascaded = true;
+                    partialMessage.siblingGroupId = siblingGroupIdToUse;
+                    partialMessage.isSelected = true;
+                    console.log(`リトライ中断エラー: 部分メッセージにカスケードフラグ設定 (gid: ${siblingGroupIdToUse})`);
+                    if (firstResponseIndexForRetry !== -1 && state.currentMessages[firstResponseIndexForRetry] && !state.currentMessages[firstResponseIndexForRetry].isCascaded) {
+                        state.currentMessages[firstResponseIndexForRetry].isCascaded = true;
+                        state.currentMessages[firstResponseIndexForRetry].siblingGroupId = siblingGroupIdToUse;
+                        console.log(`リトライ中断エラー: 最初の応答 (index ${firstResponseIndexForRetry}) にもフラグ設定: isCascaded=true, siblingGroupId=${siblingGroupIdToUse}`);
                     }
+                }
+                state.currentMessages.push(partialMessage);
+                try {
+                    if (state.settings.streamingOutput) {
+                        uiUtils.finalizeStreamingMessage(state.currentMessages.length - 1);
+                    } else {
+                        uiUtils.renderChatMessages();
+                    }
+                    await dbUtils.saveChat();
+                    console.log("部分的なメッセージ状態を保存しました。");
+                } catch (saveError) {
+                    console.error("部分メッセージの保存失敗:", saveError);
+                    uiUtils.displayError(displayErrorMessage, !isAbort);
+                }
             } else {
                 if (state.settings.streamingOutput && !isAbort) {
                     const tempPlaceholderIndex = state.currentMessages.length;
@@ -3645,138 +3656,138 @@ const appLogic = {
 
 
     // --- 背景画像ハンドラ ---
-        // 背景画像アップロード処理
-        async handleBackgroundImageUpload(file) {
-            console.log("選択されたファイル:", file.name, file.type, file.size);
-            const maxSize = 5 * 1024 * 1024; // 5MB制限 (例)
-            if (file.size > maxSize) {
-                await uiUtils.showCustomAlert(`画像サイズが大きすぎます (${(maxSize / 1024 / 1024).toFixed(1)}MB以下にしてください)`);
-                return;
-            }
-            if (!file.type.startsWith('image/')) {
-                await uiUtils.showCustomAlert("画像ファイルを選択してください (JPEG, PNG, GIF, WebPなど)");
-                return;
-            }
-            try {
-                uiUtils.revokeExistingObjectUrl(); // 既存URLを破棄
-                const blob = file; // ファイルはBlobとして扱える
-                // DBにBlobとして保存
-                await dbUtils.saveSetting('backgroundImageBlob', blob);
-                state.settings.backgroundImageBlob = blob; // stateにも反映
-                // 新しいオブジェクトURLを作成して適用
-                state.backgroundImageUrl = URL.createObjectURL(blob);
-                document.documentElement.style.setProperty('--chat-background-image', `url(${state.backgroundImageUrl})`);
-                uiUtils.updateBackgroundSettingsUI(); // UI更新
-                console.log("背景画像を更新しました。");
-                // アラートは不要 (変更は即時反映、DB保存は「設定を保存」で行う)
-            } catch (error) {
-                console.error("背景画像アップロード処理エラー:", error);
-                await uiUtils.showCustomAlert(`背景画像の処理中にエラーが発生しました: ${error}`);
-                // エラー時はリセット
-                uiUtils.revokeExistingObjectUrl();
-                document.documentElement.style.setProperty('--chat-background-image', 'none');
-                state.settings.backgroundImageBlob = null;
-                uiUtils.updateBackgroundSettingsUI();
-            }
-        },
-        // 背景画像削除の確認
-        async confirmDeleteBackgroundImage() {
-            const confirmed = await uiUtils.showCustomConfirm("背景画像を削除しますか？");
-            if (confirmed) {
-                await this.handleBackgroundImageDelete();
-            }
-        },
-        // 背景画像削除処理
-        async handleBackgroundImageDelete() {
-            try {
-                uiUtils.revokeExistingObjectUrl(); // URL破棄
-                // DBの値をnullで上書き
-                await dbUtils.saveSetting('backgroundImageBlob', null);
-                state.settings.backgroundImageBlob = null; // stateもnullに
-                // スタイルとUIをリセット
-                document.documentElement.style.setProperty('--chat-background-image', 'none');
-                uiUtils.updateBackgroundSettingsUI();
-                console.log("背景画像を削除しました。");
-                // アラート不要
-            } catch (error) {
-                console.error("背景画像削除エラー:", error);
-                await uiUtils.showCustomAlert(`背景画像の削除中にエラーが発生しました: ${error}`);
-            }
-        },
-        // -------------------------------
+    // 背景画像アップロード処理
+    async handleBackgroundImageUpload(file) {
+        console.log("選択されたファイル:", file.name, file.type, file.size);
+        const maxSize = 5 * 1024 * 1024; // 5MB制限 (例)
+        if (file.size > maxSize) {
+            await uiUtils.showCustomAlert(`画像サイズが大きすぎます (${(maxSize / 1024 / 1024).toFixed(1)}MB以下にしてください)`);
+            return;
+        }
+        if (!file.type.startsWith('image/')) {
+            await uiUtils.showCustomAlert("画像ファイルを選択してください (JPEG, PNG, GIF, WebPなど)");
+            return;
+        }
+        try {
+            uiUtils.revokeExistingObjectUrl(); // 既存URLを破棄
+            const blob = file; // ファイルはBlobとして扱える
+            // DBにBlobとして保存
+            await dbUtils.saveSetting('backgroundImageBlob', blob);
+            state.settings.backgroundImageBlob = blob; // stateにも反映
+            // 新しいオブジェクトURLを作成して適用
+            state.backgroundImageUrl = URL.createObjectURL(blob);
+            document.documentElement.style.setProperty('--chat-background-image', `url(${state.backgroundImageUrl})`);
+            uiUtils.updateBackgroundSettingsUI(); // UI更新
+            console.log("背景画像を更新しました。");
+            // アラートは不要 (変更は即時反映、DB保存は「設定を保存」で行う)
+        } catch (error) {
+            console.error("背景画像アップロード処理エラー:", error);
+            await uiUtils.showCustomAlert(`背景画像の処理中にエラーが発生しました: ${error}`);
+            // エラー時はリセット
+            uiUtils.revokeExistingObjectUrl();
+            document.documentElement.style.setProperty('--chat-background-image', 'none');
+            state.settings.backgroundImageBlob = null;
+            uiUtils.updateBackgroundSettingsUI();
+        }
+    },
+    // 背景画像削除の確認
+    async confirmDeleteBackgroundImage() {
+        const confirmed = await uiUtils.showCustomConfirm("背景画像を削除しますか？");
+        if (confirmed) {
+            await this.handleBackgroundImageDelete();
+        }
+    },
+    // 背景画像削除処理
+    async handleBackgroundImageDelete() {
+        try {
+            uiUtils.revokeExistingObjectUrl(); // URL破棄
+            // DBの値をnullで上書き
+            await dbUtils.saveSetting('backgroundImageBlob', null);
+            state.settings.backgroundImageBlob = null; // stateもnullに
+            // スタイルとUIをリセット
+            document.documentElement.style.setProperty('--chat-background-image', 'none');
+            uiUtils.updateBackgroundSettingsUI();
+            console.log("背景画像を削除しました。");
+            // アラート不要
+        } catch (error) {
+            console.error("背景画像削除エラー:", error);
+            await uiUtils.showCustomAlert(`背景画像の削除中にエラーが発生しました: ${error}`);
+        }
+    },
+    // -------------------------------
 
     // 設定を保存
     async saveSettings() {
-            // UIから値を取得 (背景Blobは別途処理済みなので除く)
-            const newSettings = {
-                apiKey: elements.apiKeyInput.value.trim(),
-                modelName: elements.modelNameSelect.value,
-                streamingOutput: elements.streamingOutputCheckbox.checked,
-                streamingSpeed: elements.streamingSpeedInput.value === '' ? AppConfig.DEFAULTS.streamingSpeed : parseInt(elements.streamingSpeedInput.value),
-                systemPrompt: elements.systemPromptDefaultTextarea.value.trim(), // デフォルト用
-                temperature: elements.temperatureInput.value === '' ? null : parseFloat(elements.temperatureInput.value),
-                maxTokens: elements.maxTokensInput.value === '' ? null : parseInt(elements.maxTokensInput.value),
-                topK: elements.topKInput.value === '' ? null : parseInt(elements.topKInput.value),
-                topP: elements.topPInput.value === '' ? null : parseFloat(elements.topPInput.value),
-                presencePenalty: elements.presencePenaltyInput.value === '' ? null : parseFloat(elements.presencePenaltyInput.value),
-                frequencyPenalty: elements.frequencyPenaltyInput.value === '' ? null : parseFloat(elements.frequencyPenaltyInput.value),
-                thinkingBudget: elements.thinkingBudgetInput.value === '' ? null : parseInt(elements.thinkingBudgetInput.value, 10),
-                includeThoughts: elements.includeThoughtsToggle.checked, // Include Thoughts 設定を取得
-                dummyUser: elements.dummyUserInput.value.trim(),
-                dummyModel: elements.dummyModelInput.value.trim(),
-                enableDummyUser: elements.enableDummyUserToggle.checked, // ダミーUser有効化設定を取得
-                enableDummyModel: elements.enableDummyModelToggle.checked, // ダミーModel有効化設定を取得
-                concatDummyModel: elements.concatDummyModelCheckbox.checked,
-                additionalModels: elements.additionalModelsTextarea.value.trim(),
-                pseudoStreaming: elements.pseudoStreamingCheckbox.checked,
-                enterToSend: elements.enterToSendCheckbox.checked,
-                historySortOrder: elements.historySortOrderSelect.value,
-                darkMode: elements.darkModeToggle.checked,
-                fontFamily: elements.fontFamilyInput.value.trim(), // フォント設定を取得
-                hideSystemPromptInChat: elements.hideSystemPromptToggle.checked, // SP非表示設定
-                enableGrounding: elements.enableGroundingToggle.checked, // ネット検索設定を取得
-                enableSwipeNavigation: elements.swipeNavigationToggle.checked,//スワイプナビゲーション設定を取得
-                debugVirtualSend: elements.debugVirtualSendToggle.checked, // デバッグ用仮想送信設定を取得
-                debugVirtualResponse: elements.debugVirtualResponseTextarea.value.trim(), // デバッグ用仮想送信の返答を取得
-                // コンテキスト圧縮設定を取得
-                compressionMode: state.isCompressionMode,
-                compressionPrompt: elements.compressionPromptTextarea.value.trim(),
-                keepFirstMessages: elements.keepFirstMessagesInput.value === '' ? AppConfig.DEFAULTS.keepFirstMessages : parseInt(elements.keepFirstMessagesInput.value),
-                keepLastMessages: elements.keepLastMessagesInput.value === '' ? AppConfig.DEFAULTS.keepLastMessages : parseInt(elements.keepLastMessagesInput.value),
-                // ContextNote設定を取得
-                contextNoteRandomFrequency: elements.contextNoteRandomFrequencyInput.value === '' ? AppConfig.DEFAULTS.contextNoteRandomFrequency : parseFloat(elements.contextNoteRandomFrequencyInput.value),
-                contextNoteRandomCount: elements.contextNoteRandomCountInput.value === '' ? AppConfig.DEFAULTS.contextNoteRandomCount : parseInt(elements.contextNoteRandomCountInput.value),
-                contextNoteMessageCount: elements.contextNoteMessageCountInput.value === '' ? AppConfig.DEFAULTS.contextNoteMessageCount : parseInt(elements.contextNoteMessageCountInput.value),
-                contextNoteMaxChars: elements.contextNoteMaxCharsInput.value === '' ? AppConfig.DEFAULTS.contextNoteMaxChars : parseInt(elements.contextNoteMaxCharsInput.value),
-                contextNoteInsertionPriority: elements.contextNoteInsertionPriorityInput.value === '' ? AppConfig.DEFAULTS.contextNoteInsertionPriority : parseInt(elements.contextNoteInsertionPriorityInput.value),
-            };
+        // UIから値を取得 (背景Blobは別途処理済みなので除く)
+        const newSettings = {
+            apiKey: elements.apiKeyInput.value.trim(),
+            modelName: elements.modelNameSelect.value,
+            streamingOutput: elements.streamingOutputCheckbox.checked,
+            streamingSpeed: elements.streamingSpeedInput.value === '' ? AppConfig.DEFAULTS.streamingSpeed : parseInt(elements.streamingSpeedInput.value),
+            systemPrompt: elements.systemPromptDefaultTextarea.value.trim(), // デフォルト用
+            temperature: elements.temperatureInput.value === '' ? null : parseFloat(elements.temperatureInput.value),
+            maxTokens: elements.maxTokensInput.value === '' ? null : parseInt(elements.maxTokensInput.value),
+            topK: elements.topKInput.value === '' ? null : parseInt(elements.topKInput.value),
+            topP: elements.topPInput.value === '' ? null : parseFloat(elements.topPInput.value),
+            presencePenalty: elements.presencePenaltyInput.value === '' ? null : parseFloat(elements.presencePenaltyInput.value),
+            frequencyPenalty: elements.frequencyPenaltyInput.value === '' ? null : parseFloat(elements.frequencyPenaltyInput.value),
+            thinkingBudget: elements.thinkingBudgetInput.value === '' ? null : parseInt(elements.thinkingBudgetInput.value, 10),
+            includeThoughts: elements.includeThoughtsToggle.checked, // Include Thoughts 設定を取得
+            dummyUser: elements.dummyUserInput.value.trim(),
+            dummyModel: elements.dummyModelInput.value.trim(),
+            enableDummyUser: elements.enableDummyUserToggle.checked, // ダミーUser有効化設定を取得
+            enableDummyModel: elements.enableDummyModelToggle.checked, // ダミーModel有効化設定を取得
+            concatDummyModel: elements.concatDummyModelCheckbox.checked,
+            additionalModels: elements.additionalModelsTextarea.value.trim(),
+            pseudoStreaming: elements.pseudoStreamingCheckbox.checked,
+            enterToSend: elements.enterToSendCheckbox.checked,
+            historySortOrder: elements.historySortOrderSelect.value,
+            darkMode: elements.darkModeToggle.checked,
+            fontFamily: elements.fontFamilyInput.value.trim(), // フォント設定を取得
+            hideSystemPromptInChat: elements.hideSystemPromptToggle.checked, // SP非表示設定
+            enableGrounding: elements.enableGroundingToggle.checked, // ネット検索設定を取得
+            enableSwipeNavigation: elements.swipeNavigationToggle.checked,//スワイプナビゲーション設定を取得
+            debugVirtualSend: elements.debugVirtualSendToggle.checked, // デバッグ用仮想送信設定を取得
+            debugVirtualResponse: elements.debugVirtualResponseTextarea.value.trim(), // デバッグ用仮想送信の返答を取得
+            // コンテキスト圧縮設定を取得
+            compressionMode: state.isCompressionMode,
+            compressionPrompt: elements.compressionPromptTextarea.value.trim(),
+            keepFirstMessages: elements.keepFirstMessagesInput.value === '' ? AppConfig.DEFAULTS.keepFirstMessages : parseInt(elements.keepFirstMessagesInput.value),
+            keepLastMessages: elements.keepLastMessagesInput.value === '' ? AppConfig.DEFAULTS.keepLastMessages : parseInt(elements.keepLastMessagesInput.value),
+            // ContextNote設定を取得
+            contextNoteRandomFrequency: elements.contextNoteRandomFrequencyInput.value === '' ? AppConfig.DEFAULTS.contextNoteRandomFrequency : parseFloat(elements.contextNoteRandomFrequencyInput.value),
+            contextNoteRandomCount: elements.contextNoteRandomCountInput.value === '' ? AppConfig.DEFAULTS.contextNoteRandomCount : parseInt(elements.contextNoteRandomCountInput.value),
+            contextNoteMessageCount: elements.contextNoteMessageCountInput.value === '' ? AppConfig.DEFAULTS.contextNoteMessageCount : parseInt(elements.contextNoteMessageCountInput.value),
+            contextNoteMaxChars: elements.contextNoteMaxCharsInput.value === '' ? AppConfig.DEFAULTS.contextNoteMaxChars : parseInt(elements.contextNoteMaxCharsInput.value),
+            contextNoteInsertionPriority: elements.contextNoteInsertionPriorityInput.value === '' ? AppConfig.DEFAULTS.contextNoteInsertionPriority : parseInt(elements.contextNoteInsertionPriorityInput.value),
+        };
 
-            try {
-                const oldSortOrder = state.settings.historySortOrder; // 更新前のソート順を保持
+        try {
+            const oldSortOrder = state.settings.historySortOrder; // 更新前のソート順を保持
 
-                // appConfigに設定を反映して保存
-                Object.entries(newSettings).forEach(([key, value]) => {
-                    appConfig.set(key, value);
-                });
-                await appConfig.save();
+            // appConfigに設定を反映して保存
+            Object.entries(newSettings).forEach(([key, value]) => {
+                appConfig.set(key, value);
+            });
+            await appConfig.save();
 
-                // stateをバリデーション後の値で更新 (背景Blobは既にstateにある)
-                state.settings = { ...state.settings, ...newSettings };
+            // stateをバリデーション後の値で更新 (背景Blobは既にstateにある)
+            state.settings = { ...state.settings, ...newSettings };
 
-                // 全設定をUIに再適用 (バリデーションで修正された値も反映)
-                uiUtils.applySettingsToUI();
-                // applyDarkMode, applyFontFamily, toggleSystemPromptVisibility は applySettingsToUI内で呼ばれる
+            // 全設定をUIに再適用 (バリデーションで修正された値も反映)
+            uiUtils.applySettingsToUI();
+            // applyDarkMode, applyFontFamily, toggleSystemPromptVisibility は applySettingsToUI内で呼ばれる
 
-                console.log("設定保存成功:", { ...state.settings, backgroundImageBlob: state.settings.backgroundImageBlob ? '[Blob]' : null });
-                await uiUtils.showCustomAlert("設定を保存しました。");
+            console.log("設定保存成功:", { ...state.settings, backgroundImageBlob: state.settings.backgroundImageBlob ? '[Blob]' : null });
+            await uiUtils.showCustomAlert("設定を保存しました。");
 
-                // ソート順が変更され、履歴画面が表示中ならリストを再描画
-                if (newSettings.historySortOrder !== oldSortOrder && state.currentScreen === 'history') {
-                    uiUtils.renderHistoryList();
-                }
-            } catch (error) {
-                await uiUtils.showCustomAlert(`設定の保存中にエラーが発生しました: ${error}`);
+            // ソート順が変更され、履歴画面が表示中ならリストを再描画
+            if (newSettings.historySortOrder !== oldSortOrder && state.currentScreen === 'history') {
+                uiUtils.renderHistoryList();
             }
+        } catch (error) {
+            await uiUtils.showCustomAlert(`設定の保存中にエラーが発生しました: ${error}`);
+        }
     },
 
     // アプリを更新 (キャッシュクリア)
@@ -3867,88 +3878,88 @@ const appLogic = {
     // --- メッセージアクション ---
     // メッセージ編集開始
     async startEditMessage(index, messageElement) {
-            // 送信中は編集不可
-            if (state.isSending) {
-                await uiUtils.showCustomAlert("送信中は編集できません。");
-                return;
-            }
-            // 他のメッセージを編集中なら警告
-            if (state.editingMessageIndex !== null && state.editingMessageIndex !== index) {
-                await uiUtils.showCustomAlert("他のメッセージを編集中です。");
-                return;
-            }
-            // システムプロンプト編集中なら警告
-            if (state.isEditingSystemPrompt) {
-                await uiUtils.showCustomAlert("システムプロンプトを編集中です。");
-                return;
-            }
-            // すでに編集中ならフォーカスするだけ
-            if (state.editingMessageIndex === index) {
-                messageElement.querySelector('.edit-textarea')?.focus();
-                return;
-            }
+        // 送信中は編集不可
+        if (state.isSending) {
+            await uiUtils.showCustomAlert("送信中は編集できません。");
+            return;
+        }
+        // 他のメッセージを編集中なら警告
+        if (state.editingMessageIndex !== null && state.editingMessageIndex !== index) {
+            await uiUtils.showCustomAlert("他のメッセージを編集中です。");
+            return;
+        }
+        // システムプロンプト編集中なら警告
+        if (state.isEditingSystemPrompt) {
+            await uiUtils.showCustomAlert("システムプロンプトを編集中です。");
+            return;
+        }
+        // すでに編集中ならフォーカスするだけ
+        if (state.editingMessageIndex === index) {
+            messageElement.querySelector('.edit-textarea')?.focus();
+            return;
+        }
 
-            const message = state.currentMessages[index];
-            if (!message) return; // メッセージデータがない場合は中断
+        const message = state.currentMessages[index];
+        if (!message) return; // メッセージデータがない場合は中断
 
-            const rawContent = message.content; // 元のテキスト
-            state.editingMessageIndex = index; // 編集中インデックスを設定
+        const rawContent = message.content; // 元のテキスト
+        state.editingMessageIndex = index; // 編集中インデックスを設定
 
-            const contentDiv = messageElement.querySelector('.message-content');
-            const editArea = messageElement.querySelector('.message-edit-area');
-            const cascadeControls = messageElement.querySelector('.message-cascade-controls'); // 上部コントロール
-            editArea.innerHTML = ''; // 編集エリアをクリア
+        const contentDiv = messageElement.querySelector('.message-content');
+        const editArea = messageElement.querySelector('.message-edit-area');
+        const cascadeControls = messageElement.querySelector('.message-cascade-controls'); // 上部コントロール
+        editArea.innerHTML = ''; // 編集エリアをクリア
 
-            let horizontalPadding = 0;
-            try {// パディング計算
-                const computedStyle = window.getComputedStyle(messageElement);
-                const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-                const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
-                horizontalPadding = paddingLeft + paddingRight;
-            } catch (e) {
-                console.error("幅の動的計算中にエラー:", e);
-            }
-            messageElement.style.width = `calc(var(--message-max-width) + ${horizontalPadding}px + 17px)`/*17pxは決め打ち。対処療法*/;
+        let horizontalPadding = 0;
+        try {// パディング計算
+            const computedStyle = window.getComputedStyle(messageElement);
+            const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+            const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+            horizontalPadding = paddingLeft + paddingRight;
+        } catch (e) {
+            console.error("幅の動的計算中にエラー:", e);
+        }
+        messageElement.style.width = `calc(var(--message-max-width) + ${horizontalPadding}px + 17px)`/*17pxは決め打ち。対処療法*/;
 
-            // テキストエリア作成
-            const textarea = document.createElement('textarea');
-            textarea.value = rawContent;
-            textarea.classList.add('edit-textarea');
-            textarea.rows = 3; // 初期行数
-            // textarea.oninput = () => uiUtils.adjustTextareaHeight(textarea, 400); // 入力で高さ調整 (最大400px)
-			// 一番下のメッセージを編集するときに、チャット欄のスクロールバーのカクツキが発生するため、コメントアウト
+        // テキストエリア作成
+        const textarea = document.createElement('textarea');
+        textarea.value = rawContent;
+        textarea.classList.add('edit-textarea');
+        textarea.rows = 3; // 初期行数
+        // textarea.oninput = () => uiUtils.adjustTextareaHeight(textarea, 400); // 入力で高さ調整 (最大400px)
+        // 一番下のメッセージを編集するときに、チャット欄のスクロールバーのカクツキが発生するため、コメントアウト
 
-            // アクションボタンエリア作成
-            const actionsDiv = document.createElement('div');
-            actionsDiv.classList.add('message-edit-actions');
+        // アクションボタンエリア作成
+        const actionsDiv = document.createElement('div');
+        actionsDiv.classList.add('message-edit-actions');
 
-            // 保存ボタン
-            const saveButton = document.createElement('button');
-            saveButton.textContent = '保存';
-            saveButton.classList.add('save-edit-btn');
-            saveButton.onclick = () => this.saveEditMessage(index, messageElement);
+        // 保存ボタン
+        const saveButton = document.createElement('button');
+        saveButton.textContent = '保存';
+        saveButton.classList.add('save-edit-btn');
+        saveButton.onclick = () => this.saveEditMessage(index, messageElement);
 
-            // キャンセルボタン
-            const cancelButton = document.createElement('button');
-            cancelButton.textContent = 'キャンセル';
-            cancelButton.classList.add('cancel-edit-btn');
-            cancelButton.onclick = () => this.cancelEditMessage(index, messageElement);
+        // キャンセルボタン
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'キャンセル';
+        cancelButton.classList.add('cancel-edit-btn');
+        cancelButton.onclick = () => this.cancelEditMessage(index, messageElement);
 
-            actionsDiv.appendChild(saveButton);
-            actionsDiv.appendChild(cancelButton);
-            editArea.appendChild(textarea);
-            editArea.appendChild(actionsDiv);
+        actionsDiv.appendChild(saveButton);
+        actionsDiv.appendChild(cancelButton);
+        editArea.appendChild(textarea);
+        editArea.appendChild(actionsDiv);
 
-            // UI切り替え
-            messageElement.classList.add('editing'); // 編集中クラス追加
-            if(contentDiv) contentDiv.classList.add('hidden'); // 元のコンテンツ非表示
-            if(cascadeControls) cascadeControls.classList.add('hidden'); // 上部コントロール非表示
-            editArea.classList.remove('hidden'); // 編集エリア表示
+        // UI切り替え
+        messageElement.classList.add('editing'); // 編集中クラス追加
+        if (contentDiv) contentDiv.classList.add('hidden'); // 元のコンテンツ非表示
+        if (cascadeControls) cascadeControls.classList.add('hidden'); // 上部コントロール非表示
+        editArea.classList.remove('hidden'); // 編集エリア表示
 
-            // 初期高さ調整とフォーカス
-            uiUtils.adjustTextareaHeight(textarea, 400);
-            textarea.focus();
-            textarea.select(); // テキスト全選択
+        // 初期高さ調整とフォーカス
+        uiUtils.adjustTextareaHeight(textarea, 400);
+        textarea.focus();
+        textarea.select(); // テキスト全選択
     },
 
     // メッセージ編集を保存
@@ -3974,7 +3985,7 @@ const appLogic = {
 
         // UIのメッセージ内容を更新
         const contentDiv = messageElement.querySelector('.message-content');
-        if(contentDiv && typeof marked !== 'undefined' && originalMessage.role === 'model') { // モデルメッセージのみMarkdown
+        if (contentDiv && typeof marked !== 'undefined' && originalMessage.role === 'model') { // モデルメッセージのみMarkdown
             try {
                 contentDiv.innerHTML = marked.parse(newRawContent || ''); // Markdownパース
             } catch (e) {
@@ -3984,7 +3995,7 @@ const appLogic = {
         } else if (contentDiv) { // ユーザーメッセージ or markedなし
             const pre = contentDiv.querySelector('pre') || document.createElement('pre');
             pre.textContent = newRawContent;
-            if(!contentDiv.querySelector('pre')) {
+            if (!contentDiv.querySelector('pre')) {
                 contentDiv.innerHTML = ''; // 既存内容をクリア
                 contentDiv.appendChild(pre);
             }
@@ -4012,17 +4023,17 @@ const appLogic = {
     },
     // メッセージ編集をキャンセル
     cancelEditMessage(index, messageElement = null) {
-            // 要素が渡されていない場合は検索
-            if (!messageElement) {
-                messageElement = elements.messageContainer.querySelector(`.message[data-index="${index}"]`);
-            }
-            if (messageElement) {
-                this.finishEditing(messageElement); // 編集UIを終了
-            } else if (state.editingMessageIndex === index) {
-                // 要素が見つからなくても、編集中インデックスが一致すればリセット
-                state.editingMessageIndex = null;
-                console.log("編集キャンセル: 要素が見つかりませんでしたがインデックスをリセット:", index);
-            }
+        // 要素が渡されていない場合は検索
+        if (!messageElement) {
+            messageElement = elements.messageContainer.querySelector(`.message[data-index="${index}"]`);
+        }
+        if (messageElement) {
+            this.finishEditing(messageElement); // 編集UIを終了
+        } else if (state.editingMessageIndex === index) {
+            // 要素が見つからなくても、編集中インデックスが一致すればリセット
+            state.editingMessageIndex = null;
+            console.log("編集キャンセル: 要素が見つかりませんでしたがインデックスをリセット:", index);
+        }
     },
     // 編集UIを終了する共通処理
     finishEditing(messageElement) {
@@ -4035,9 +4046,9 @@ const appLogic = {
         messageElement.style.removeProperty('width');
 
         messageElement.classList.remove('editing'); // 編集中クラス削除
-        if(contentDiv) contentDiv.classList.remove('hidden'); // 元のコンテンツ表示
-        if(cascadeControls) cascadeControls.classList.remove('hidden'); // 上部コントロール再表示
-        if(editArea) { // 編集エリアを非表示にして内容クリア
+        if (contentDiv) contentDiv.classList.remove('hidden'); // 元のコンテンツ表示
+        if (cascadeControls) cascadeControls.classList.remove('hidden'); // 上部コントロール再表示
+        if (editArea) { // 編集エリアを非表示にして内容クリア
             editArea.classList.add('hidden');
             editArea.innerHTML = '';
         }
@@ -4065,12 +4076,12 @@ const appLogic = {
             return;
         }
         if (index < 0 || index >= state.currentMessages.length) {
-                if (index === -1) {
-                    console.log("一時的なメッセージ（インデックス-1）の削除は表示のみで処理されます");
-                } else {
-                    console.error("削除対象のインデックスが無効:", index);
-                }
-                return;
+            if (index === -1) {
+                console.log("一時的なメッセージ（インデックス-1）の削除は表示のみで処理されます");
+            } else {
+                console.error("削除対象のインデックスが無効:", index);
+            }
+            return;
         }
 
         const messageToDelete = state.currentMessages[index];
@@ -4144,11 +4155,11 @@ const appLogic = {
                 await uiUtils.showCustomAlert("メッセージ削除後のチャット保存に失敗しました。");
             }
         } else {
-                console.log("削除キャンセル");
+            console.log("削除キャンセル");
         }
     },
 
-    
+
     // 指定メッセージからリトライ
     async retryFromMessage(index) {
         // 編集中は不可
@@ -4222,7 +4233,7 @@ const appLogic = {
         // UIを更新 (削除された状態を表示)
         uiUtils.renderChatMessages();
         uiUtils.scrollToBottom(); // 削除後の表示位置にスクロール
-        
+
         // --- 既存の応答を一時的に非表示にする処理 ---
         const elementsToHide = []; // 非表示にしたDOM要素を保持する配列
         const messageContainer = elements.messageContainer; // パフォーマンスのためキャッシュ
@@ -4233,11 +4244,11 @@ const appLogic = {
                 const msgIndex = parseInt(el.dataset.index, 10);
                 const potentialMsg = state.currentMessages[msgIndex]; // 削除後のインデックスでアクセス試行
                 if (potentialMsg && potentialMsg.role === 'model' && potentialMsg.siblingGroupId === targetSiblingGroupId) {
-                        el.classList.add('retrying-hidden');
-                        elementsToHide.push(el);
+                    el.classList.add('retrying-hidden');
+                    elementsToHide.push(el);
                 }
             });
-                console.log(`${elementsToHide.length}件の既存応答 (グループ ${targetSiblingGroupId}) を一時的に非表示にしました。`);
+            console.log(`${elementsToHide.length}件の既存応答 (グループ ${targetSiblingGroupId}) を一時的に非表示にしました。`);
         } else if (index + 1 < state.currentMessages.length && state.currentMessages[index + 1]?.role === 'model') {
             // 非カスケードの単一応答を非表示（削除後のインデックス index + 1 がモデル応答の場合）
             const element = messageContainer.querySelector(`.message.model[data-index="${index + 1}"]`);
@@ -4307,14 +4318,14 @@ const appLogic = {
             requestAnimationFrame(() => { // DOM更新が完了するのを待つ
                 const newlySelectedElement = elements.messageContainer.querySelector(`.message[data-index="${newlySelectedIndex}"]`);
                 if (newlySelectedElement && !newlySelectedElement.classList.contains('editing')) {
-                        // 他に表示されているものがあれば消す
-                        const currentlyShown = elements.messageContainer.querySelector('.message.show-actions');
-                        if (currentlyShown && currentlyShown !== newlySelectedElement) {
-                            currentlyShown.classList.remove('show-actions');
-                        }
-                        // 新しい要素にクラスを付与
-                        newlySelectedElement.classList.add('show-actions');
-                        console.log(`.show-actions を再付与: index=${newlySelectedIndex}`);
+                    // 他に表示されているものがあれば消す
+                    const currentlyShown = elements.messageContainer.querySelector('.message.show-actions');
+                    if (currentlyShown && currentlyShown !== newlySelectedElement) {
+                        currentlyShown.classList.remove('show-actions');
+                    }
+                    // 新しい要素にクラスを付与
+                    newlySelectedElement.classList.add('show-actions');
+                    console.log(`.show-actions を再付与: index=${newlySelectedIndex}`);
                 }
             });
 
@@ -4375,11 +4386,11 @@ const appLogic = {
                         newlySelectedIndex = lastSiblingItem.originalIndex; // すでに選択済みだった場合もインデックス記録
                     }
                 } else {
-                        // 削除されたのが非選択だった場合、依然として選択中のものを探す
-                        const stillSelectedItem = remainingSiblingsWithIndices.find(item => item.msg.isSelected);
-                        if (stillSelectedItem) {
-                            newlySelectedIndex = stillSelectedItem.originalIndex;
-                        }
+                    // 削除されたのが非選択だった場合、依然として選択中のものを探す
+                    const stillSelectedItem = remainingSiblingsWithIndices.find(item => item.msg.isSelected);
+                    if (stillSelectedItem) {
+                        newlySelectedIndex = stillSelectedItem.originalIndex;
+                    }
                 }
             } else {
                 console.log(`グループ ${groupId} の最後の応答が削除されました。`);
@@ -4388,17 +4399,17 @@ const appLogic = {
             // --- UI再描画 & 操作ボックス再表示 ---
             uiUtils.renderChatMessages();
             requestAnimationFrame(() => {
-                    if (newlySelectedIndex !== -1) {
-                        const elementToShowActions = elements.messageContainer.querySelector(`.message[data-index="${newlySelectedIndex}"]`);
-                        if (elementToShowActions && !elementToShowActions.classList.contains('editing')) {
-                            const currentlyShown = elements.messageContainer.querySelector('.message.show-actions');
-                            if (currentlyShown && currentlyShown !== elementToShowActions) {
-                                currentlyShown.classList.remove('show-actions');
-                            }
-                            elementToShowActions.classList.add('show-actions');
-                            console.log(`.show-actions を再付与 (単一カスケード削除後): index=${newlySelectedIndex}`);
+                if (newlySelectedIndex !== -1) {
+                    const elementToShowActions = elements.messageContainer.querySelector(`.message[data-index="${newlySelectedIndex}"]`);
+                    if (elementToShowActions && !elementToShowActions.classList.contains('editing')) {
+                        const currentlyShown = elements.messageContainer.querySelector('.message.show-actions');
+                        if (currentlyShown && currentlyShown !== elementToShowActions) {
+                            currentlyShown.classList.remove('show-actions');
                         }
+                        elementToShowActions.classList.add('show-actions');
+                        console.log(`.show-actions を再付与 (単一カスケード削除後): index=${newlySelectedIndex}`);
                     }
+                }
             });
 
             // --- DB保存 ---
@@ -4409,10 +4420,10 @@ const appLogic = {
                 await uiUtils.showCustomAlert("応答削除後のチャット状態の保存に失敗しました。");
             }
         } else {
-                console.log("単一カスケード応答の削除キャンセル");
+            console.log("単一カスケード応答の削除キャンセル");
         }
     },
-    
+
     // --- ファイルアップロード関連ロジック ---
     // ファイル選択ハンドラ
     async handleFileSelection(fileList) {
@@ -4565,7 +4576,7 @@ const appLogic = {
     },
 
     // --- レスポンス置換管理機能 ---
-    
+
     // レスポンス置換をチャットデータから読み込み
     async loadResponseReplacementsFromChat(chatData = null) {
         if (chatData && chatData.responseReplacements) {
@@ -4588,14 +4599,14 @@ const appLogic = {
             // 新規チャットの場合
             state.responseReplacer = new ResponseReplacer();
         }
-        
+
         // ResponseReplacerUIインスタンスを生成
-		if (state.responseReplacerUI) {
-			state.responseReplacerUI.sync(state.responseReplacer);
-		} else {
-			state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
-			this.responseReplacerUIInit();
-		}
+        if (state.responseReplacerUI) {
+            state.responseReplacerUI.sync(state.responseReplacer);
+        } else {
+            state.responseReplacerUI = new ResponseReplacerUI(state.responseReplacer, elements);
+            this.responseReplacerUIInit();
+        }
     },
 
     // ContextNoteをチャットデータから読み込み
@@ -4620,13 +4631,13 @@ const appLogic = {
             // 新規チャットの場合
             state.contextNote = new ContextNote();
         }
-        
-		if (state.contextNoteUI) {
-			state.contextNoteUI.sync(state.contextNote);
-		} else {
-			state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
-			this.contextNoteUIInit();
-		}
+
+        if (state.contextNoteUI) {
+            state.contextNoteUI.sync(state.contextNote);
+        } else {
+            state.contextNoteUI = new ContextNoteUI(state.contextNote, elements);
+            this.contextNoteUIInit();
+        }
     },
 
     // タブUI制御
@@ -4668,7 +4679,7 @@ const appLogic = {
     },
 
     // 共通のアラート表示ハンドラー
-	onShowAlert(event) {
+    onShowAlert(event) {
         uiUtils.showCustomAlert(event.detail.message);
     },
 
@@ -4691,13 +4702,13 @@ const appLogic = {
         );
     },
 
-	async _onReplacementSave(error_string) {
+    async _onReplacementSave(error_string) {
         try {
             await dbUtils.saveChat();
         } catch (error) {
             console.error(error_string, error);
         }
-	},
+    },
 
     async onReplacementSaved() {
         await this._onReplacementSave('レスポンス置換保存エラー:');
@@ -4720,7 +4731,7 @@ const appLogic = {
         await this._onReplacementSave('レスポンス置換移動保存エラー:');
     },
 
-	
+
     // ContextNoteUIのイベントリスナーを初期化
     contextNoteUIInit() {
         state.contextNoteUI.addEventListener(
@@ -4768,7 +4779,7 @@ const appLogic = {
         await this._onContextNoteSave('ContextNote移動保存エラー:');
     },
 
-	
+
     // 圧縮状態表示を更新
     updateCompressionStatusDisplay() {
         const compressionStatusContent = document.getElementById('compression-status-content');
@@ -4787,12 +4798,12 @@ const appLogic = {
         // 圧縮データがある場合、詳細を表示
         const summary = state.compressedSummary;
         const timestamp = new Date(summary.timestamp).toLocaleString('ja-JP');
-        
+
         // 圧縮範囲のメッセージ数を計算
         const compressedMessageCount = summary.endIndex - summary.startIndex + 1;
-        
+
         // 圧縮率を計算
-        const compressionRatio = summary.originalTokens > 0 
+        const compressionRatio = summary.originalTokens > 0
             ? ((summary.originalTokens - summary.compressedTokens) / summary.originalTokens * 100).toFixed(1)
             : '0.0';
 
@@ -4876,9 +4887,9 @@ const appLogic = {
 
     // デフォルトのコンテキストノート仕様を追加
     addDefaultContextNoteSpec() {
-		state.contextNote.addDefaultSpec();
+        state.contextNote.addDefaultSpec();
 
-		dbUtils.saveChat().catch(error => console.error('デフォルトコンテキストノート保存エラー:', error));
+        dbUtils.saveChat().catch(error => console.error('デフォルトコンテキストノート保存エラー:', error));
     },
 
     // ContextNoteシステムメッセージを表示・更新
@@ -4893,25 +4904,25 @@ const appLogic = {
 
         // 新しいサマリーを取得
         const summaryString = state.contextNote.getAllNotesSummary();
-        
+
         // メッセージが存在しない場合（新規チャット）は表示しない
         const messages = elements.messageContainer.querySelectorAll('.message');
         if (messages.length === 0) {
             return;
         }
-        
+
         if (summaryString) {
             // 新しいシステムメッセージを作成
             const summaryMessageDiv = document.createElement('div');
             summaryMessageDiv.classList.add('message', 'system-info');
-            
+
             const contentDiv = document.createElement('div');
             contentDiv.classList.add('message-content');
-            
+
             const pre = document.createElement('pre');
             pre.textContent = summaryString;
             contentDiv.appendChild(pre);
-            
+
             summaryMessageDiv.appendChild(contentDiv);
 
             // 2投目の位置に挿入（最初のユーザーメッセージの後）
@@ -4922,7 +4933,7 @@ const appLogic = {
                 // メッセージがない場合は最初に追加
                 elements.messageContainer.appendChild(summaryMessageDiv);
             }
-            
+
             uiUtils.scrollToBottom();
         }
     },
@@ -4935,7 +4946,7 @@ const appLogic = {
                 await uiUtils.showCustomAlert("チャットデータが空です。");
                 return;
             }
-            
+
             const exportText = chat.exportAsText();
             const safeTitle = chat.getSafeTitle();
             uiUtils.makeDownloadFile(exportText, `${safeTitle}.txt`, 'text/plain;charset=utf-8');
@@ -4952,11 +4963,11 @@ const appLogic = {
                 await uiUtils.showCustomAlert("チャットデータが見つかりません。");
                 return;
             }
-            
+
             const exportData = chat.exportAsJSON();
             const safeTitle = chat.getSafeTitle();
             const filename = `${safeTitle}_complete.json`;
-            
+
             uiUtils.makeDownloadFile(JSON.stringify(exportData, null, 2), filename, 'application/json;charset=utf-8');
         } catch (error) {
             await uiUtils.showCustomAlert(`エクスポートエラー: ${error.message}`);
@@ -4967,18 +4978,18 @@ const appLogic = {
     async importChatFromJson(file) {
         try {
             console.log("JSONチャットインポート開始:", file.name);
-            
+
             const importData = await dbUtils.parseJSONFile(file);
             const chatData = dbUtils.validateChatImportData(importData);
-            
+
             const newChatId = await dbUtils.saveChatData(chatData);
-            
+
             console.log("JSONチャットインポート成功:", newChatId);
             await uiUtils.showCustomAlert(`チャット「${chatData.title}」を完全に復元しました。\n\nインポート日時: ${new Date().toLocaleString()}\n元の作成日時: ${new Date(chatData.createdAt).toLocaleString()}`);
-            
+
             // 履歴リストを再描画
             uiUtils.renderHistoryList();
-            
+
         } catch (error) {
             console.error("JSONインポート処理エラー:", error);
             await uiUtils.showCustomAlert(`JSONファイルのインポート中にエラーが発生しました: ${error.message}`);
@@ -4991,7 +5002,7 @@ const appLogic = {
             const exportData = await dbUtils.prepareAllDataForExport();
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const filename = `${DB_NAME.toLowerCase()}_backup_${timestamp}.json`;
-            
+
             uiUtils.makeDownloadFile(JSON.stringify(exportData, null, 2), filename, 'application/json;charset=utf-8');
             console.log("全データバックアップ完了:", exportData.chats.length, "チャット");
         } catch (error) {
@@ -5010,7 +5021,7 @@ const appLogic = {
                 "※ この操作は取り消せません\n" +
                 "※ APIキーは復元されません"
             );
-            
+
             if (!confirmed) return;
 
             // ファイル選択を促す
@@ -5025,22 +5036,22 @@ const appLogic = {
     async handleRestoreFile(file) {
         try {
             console.log("全データ復元開始:", file.name);
-            
+
             const importData = await dbUtils.parseJSONFile(file);
             dbUtils.validateAllDataImportData(importData);
             const result = await dbUtils.restoreAllDataFromImport(importData);
-            
+
             console.log("全データ復元成功:", result.chatCount, "チャット");
-            
+
             await uiUtils.showCustomAlert(
                 `データ復元が完了しました。\n\n` +
                 `復元したチャット数: ${result.chatCount}件\n\n` +
                 `※ ページを再読み込みして設定を反映してください。`
             );
-            
+
             // 設定画面を閉じてチャット画面に戻る
             uiUtils.showScreen('chat');
-            
+
         } catch (error) {
             console.error("復元ファイル処理エラー:", error);
             await uiUtils.showCustomAlert(`復元中にエラーが発生しました: ${error.message}`);
